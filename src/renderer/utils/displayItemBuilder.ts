@@ -78,7 +78,12 @@ function linkTeammateReplies(items: AIGroupDisplayItem[]): void {
  * Build a flat chronological list of display items for the AI Group.
  *
  * Strategy:
- * 1. Skip the step that represents lastOutput (to avoid duplication)
+ * 1. Skip the text-output step that represents lastOutput (to avoid duplicating
+ *    the same prose both inline and in the always-visible LastOutputDisplay).
+ *    Tool calls are never skipped this way, even when a tool_result happens to
+ *    be the group's lastOutput — the tool still needs its own LinkedToolItem
+ *    card (icon, name, Input/Output) so it renders consistently with every
+ *    other tool call in the session, not just as a raw preview string.
  * 2. For tool_call steps, use the LinkedToolItem (which includes the result)
  * 3. Skip standalone tool_result steps (already linked to calls)
  * 4. Skip Task tool_call steps that have associated subagents (avoid duplication)
@@ -108,7 +113,9 @@ export function buildDisplayItems(
     subagents.map((s) => s.parentTaskId).filter((id): id is string => !!id)
   );
 
-  // Find the step ID of lastOutput to skip it
+  // Find the step ID of the text lastOutput to skip it (avoids showing the same
+  // prose both inline and in the always-visible LastOutputDisplay). Tool calls
+  // are intentionally NOT matched here — see function doc above.
   let lastOutputStepId: string | undefined;
   if (lastOutput) {
     for (let i = steps.length - 1; i >= 0; i--) {
@@ -117,14 +124,6 @@ export function buildDisplayItems(
         lastOutput.type === 'text' &&
         step.type === 'output' &&
         step.content.outputText === lastOutput.text
-      ) {
-        lastOutputStepId = step.id;
-        break;
-      }
-      if (
-        lastOutput.type === 'tool_result' &&
-        step.type === 'tool_result' &&
-        step.content.toolResultContent === lastOutput.toolResult
       ) {
         lastOutputStepId = step.id;
         break;
@@ -515,7 +514,8 @@ export function buildDisplayItemsFromMessages(
 
     // Skip Task/Agent tool calls that have associated subagents
     // The subagent will be shown separately, so showing the raw call is redundant
-    const isTaskWithSubagent = isSubagentSpawnToolName(call.name) && taskIdsWithSubagents.has(toolId);
+    const isTaskWithSubagent =
+      isSubagentSpawnToolName(call.name) && taskIdsWithSubagents.has(toolId);
     if (isTaskWithSubagent) {
       continue;
     }

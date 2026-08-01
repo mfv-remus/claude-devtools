@@ -29,6 +29,11 @@ export function extractSemanticStepsFromAIChunk(chunk: AIChunk | EnhancedAIChunk
   // Note: Task tool calls are included in semantic steps for context token tracking.
   // The renderer's buildDisplayItems filters Task tools with subagents.
 
+  // Tracks tool_use id -> tool name so tool_result steps (processed below, in the
+  // same forward pass) can report which tool they belong to. A call's tool_use
+  // block always appears earlier in chunk.responses than its tool_result.
+  const toolNameByCallId = new Map<string, string>();
+
   // Process only AI responses (no user message in AIChunk)
   for (const msg of chunk.responses) {
     if (msg.type === 'assistant') {
@@ -60,6 +65,8 @@ export function extractSemanticStepsFromAIChunk(chunk: AIChunk | EnhancedAIChunk
         }
 
         if (block.type === 'tool_use' && block.id && block.name) {
+          toolNameByCallId.set(block.id, block.name);
+
           // Include ALL tool calls in semantic steps, including Task tools with processes.
           // Task tools with processes are filtered from DISPLAY in the renderer's buildDisplayItems,
           // but they should be included here for accurate context token tracking.
@@ -125,6 +132,7 @@ export function extractSemanticStepsFromAIChunk(chunk: AIChunk | EnhancedAIChunk
           startTime: new Date(msg.timestamp),
           durationMs: 0,
           content: {
+            toolName: toolNameByCallId.get(result.toolUseId),
             toolResultContent:
               typeof result.content === 'string' ? result.content : JSON.stringify(result.content),
             isError: result.isError,
