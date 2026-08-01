@@ -7,11 +7,13 @@ import {
   buildTodoPath,
   decodePath,
   encodePath,
+  extractBaseDir,
   extractProjectName,
   extractSessionId,
   getProjectsBasePath,
   getTodosBasePath,
   isValidEncodedPath,
+  isValidProjectId,
 } from '../../../src/main/utils/pathDecoder';
 
 describe('pathDecoder', () => {
@@ -106,9 +108,9 @@ describe('pathDecoder', () => {
       // Without cwdHint, dashes are decoded as slashes (lossy)
       expect(extractProjectName('-Users-name-claude-devtools')).toBe('devtools');
       // With cwdHint, the actual project name is preserved
-      expect(
-        extractProjectName('-Users-name-claude-devtools', '/Users/name/claude-devtools')
-      ).toBe('claude-devtools');
+      expect(extractProjectName('-Users-name-claude-devtools', '/Users/name/claude-devtools')).toBe(
+        'claude-devtools'
+      );
     });
 
     it('should fall back to decoded name when cwdHint is undefined', () => {
@@ -218,6 +220,42 @@ describe('pathDecoder', () => {
   describe('getTodosBasePath', () => {
     it('should return todos base path', () => {
       expect(getTodosBasePath()).toBe(path.join('/home/testuser', '.claude', 'todos'));
+    });
+  });
+
+  describe('isValidProjectId', () => {
+    it('should accept a plain encoded path', () => {
+      expect(isValidProjectId('-Users-name-project')).toBe(true);
+    });
+
+    it('should accept a composite ID with a subdir-name suffix', () => {
+      expect(isValidProjectId('-Users-name-project~apps-foo')).toBe(true);
+    });
+
+    it('should accept a composite ID with a hash-disambiguated suffix', () => {
+      expect(isValidProjectId('-Users-name-project~apps-foo-abc12345')).toBe(true);
+    });
+
+    it('should reject an empty string', () => {
+      expect(isValidProjectId('')).toBe(false);
+    });
+
+    it('should reject a composite ID with an invalid base part', () => {
+      expect(isValidProjectId('not-absolute~apps-foo')).toBe(false);
+    });
+  });
+
+  describe('extractBaseDir', () => {
+    it('should return the ID as-is for plain encoded paths', () => {
+      expect(extractBaseDir('-Users-name-project')).toBe('-Users-name-project');
+    });
+
+    it('should strip the subproject suffix from composite IDs', () => {
+      expect(extractBaseDir('-Users-name-project~apps-foo')).toBe('-Users-name-project');
+    });
+
+    it('should split on the last separator when the suffix contains a hash disambiguator', () => {
+      expect(extractBaseDir('-Users-name-project~apps-foo-abc12345')).toBe('-Users-name-project');
     });
   });
 });

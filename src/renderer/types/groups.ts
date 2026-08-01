@@ -118,6 +118,32 @@ export interface SystemGroup {
   commandName?: string; // Optional: extracted command name
 }
 
+/**
+ * Hook Group - represents a single CLI hook execution
+ * (SessionStart, UserPromptSubmit, PostToolUse, etc.).
+ */
+export interface HookGroup {
+  id: string;
+  message: ParsedMessage;
+  timestamp: Date;
+  /** Full hook identifier, e.g. "PostToolUse:Write" */
+  hookName: string;
+  /** Hook lifecycle event, e.g. "PostToolUse" */
+  hookEvent: string;
+  /** Whether the hook ran to completion or was cancelled (e.g. superseded, interrupted) */
+  status: 'success' | 'cancelled';
+  /** Shell command that was executed */
+  command?: string;
+  stdout?: string;
+  stderr?: string;
+  exitCode?: number;
+  durationMs?: number;
+  /** systemMessage extracted from the hook's stdout JSON, shown to the user in the CLI */
+  systemMessage?: string;
+  /** hookSpecificOutput.additionalContext extracted from the hook's stdout JSON */
+  additionalContext?: string[];
+}
+
 // =============================================================================
 // AI Group Types
 // =============================================================================
@@ -377,14 +403,15 @@ export interface CompactGroup {
 }
 
 /**
- * Chat item - can be user, system, ai, or compact.
+ * Chat item - can be user, system, ai, compact, or hook.
  * These are INDEPENDENT items in a flat list, not paired turns.
  */
 export type ChatItem =
   | { type: 'user'; group: UserGroup }
   | { type: 'system'; group: SystemGroup }
   | { type: 'ai'; group: AIGroup }
-  | { type: 'compact'; group: CompactGroup };
+  | { type: 'compact'; group: CompactGroup }
+  | { type: 'hook'; group: HookGroup };
 
 /**
  * Session conversation as a flat list of independent chat items.
@@ -403,4 +430,6 @@ export interface SessionConversation {
   totalAIGroups: number;
   /** Total count of compact groups */
   totalCompactGroups: number;
+  /** Total count of hook groups */
+  totalHookGroups: number;
 }

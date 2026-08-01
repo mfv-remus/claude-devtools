@@ -50,10 +50,7 @@ describe('ProjectScanner cwd split logic', () => {
     // Session WITHOUT cwd (older format)
     fs.writeFileSync(
       path.join(projectDir, 'session-no-cwd.jsonl'),
-      createSessionLine({ type: 'system' }) +
-        '\n' +
-        createSessionLine({ type: 'user' }) +
-        '\n'
+      createSessionLine({ type: 'system' }) + '\n' + createSessionLine({ type: 'user' }) + '\n'
     );
 
     const scanner = new ProjectScanner(projectsDir);
@@ -97,9 +94,14 @@ describe('ProjectScanner cwd split logic', () => {
     const myProjects = projects.filter((p) => p.id.includes('myproject'));
     expect(myProjects).toHaveLength(2);
 
-    // Both should be composite IDs
+    // Both should be composite IDs, using the subdir name (not a hash) as the suffix.
+    // The cwd matching the project's own directory ("root") gets a fixed "root"
+    // suffix instead of repeating the project name.
     for (const proj of myProjects) {
-      expect(proj.id).toContain('::');
+      expect(proj.id).toContain('~');
     }
+    expect(myProjects.map((p) => p.id).sort()).toEqual(
+      ['-Users-test-myproject~other-project', '-Users-test-myproject~root'].sort()
+    );
   });
 });

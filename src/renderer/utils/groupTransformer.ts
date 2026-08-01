@@ -13,6 +13,7 @@ import {
   isAssistantMessage,
   isEnhancedAIChunk,
   isEnhancedCompactChunk,
+  isEnhancedHookChunk,
   isEnhancedSystemChunk,
   isEnhancedUserChunk,
 } from '@renderer/types/data';
@@ -24,6 +25,7 @@ import type {
   EnhancedAIChunk,
   EnhancedChunk,
   EnhancedCompactChunk,
+  EnhancedHookChunk,
   EnhancedSystemChunk,
   EnhancedUserChunk,
   ParsedMessage,
@@ -39,6 +41,7 @@ import type {
   CommandInfo,
   CompactGroup,
   FileReference,
+  HookGroup,
   ImageData,
   SessionConversation,
   SystemGroup,
@@ -93,6 +96,7 @@ export function transformChunksToConversation(
       totalSystemGroups: 0,
       totalAIGroups: 0,
       totalCompactGroups: 0,
+      totalHookGroups: 0,
     };
   }
 
@@ -101,6 +105,7 @@ export function transformChunksToConversation(
   let systemCount = 0;
   let aiCount = 0;
   let compactCount = 0;
+  let hookCount = 0;
 
   for (const chunk of chunks) {
     if (isEnhancedUserChunk(chunk)) {
@@ -126,6 +131,12 @@ export function transformChunksToConversation(
         group: createCompactGroup(chunk),
       });
       compactCount++;
+    } else if (isEnhancedHookChunk(chunk)) {
+      items.push({
+        type: 'hook',
+        group: createHookGroup(chunk),
+      });
+      hookCount++;
     } else {
       const unhandledChunkType =
         'chunkType' in chunk ? (chunk as EnhancedChunk).chunkType : 'unknown';
@@ -184,6 +195,7 @@ export function transformChunksToConversation(
     totalSystemGroups: systemCount,
     totalAIGroups: aiCount,
     totalCompactGroups: compactCount,
+    totalHookGroups: hookCount,
   };
 }
 
@@ -225,6 +237,7 @@ export function incrementalUpdateConversation(
   let systemCount = 0;
   let aiCount = 0;
   let compactCount = 0;
+  let hookCount = 0;
   for (const item of items) {
     switch (item.type) {
       case 'user':
@@ -238,6 +251,9 @@ export function incrementalUpdateConversation(
         break;
       case 'compact':
         compactCount++;
+        break;
+      case 'hook':
+        hookCount++;
         break;
     }
   }
@@ -287,6 +303,12 @@ export function incrementalUpdateConversation(
         group: createCompactGroup(chunk),
       });
       compactCount++;
+    } else if (isEnhancedHookChunk(chunk)) {
+      items.push({
+        type: 'hook',
+        group: createHookGroup(chunk),
+      });
+      hookCount++;
     }
   }
 
@@ -347,6 +369,7 @@ export function incrementalUpdateConversation(
     totalSystemGroups: systemCount,
     totalAIGroups: aiCount,
     totalCompactGroups: compactCount,
+    totalHookGroups: hookCount,
   };
 }
 
@@ -607,6 +630,77 @@ function createCompactGroup(chunk: EnhancedCompactChunk): CompactGroup {
     id: chunk.id, // Use stable chunk ID instead of array index
     timestamp: chunk.startTime,
     message: chunk.message, // Pass through the compact summary message
+  };
+}
+
+// =============================================================================
+// HookGroup Creation
+// =============================================================================
+
+/**
+ * Parses a hook's stdout as JSON to extract the fields the CLI itself surfaces
+ * to the user: `systemMessage` and `hookSpecificOutput.additionalContext`.
+ * Hooks that print plain (non-JSON) text have neither field.
+ */
+function parseHookStdout(stdout: string): {
+  systemMessage?: string;
+  additionalContext?: string[];
+} {
+  if (!stdout.trim()) return {};
+
+  try {
+    const parsed = JSON.parse(stdout) as {
+      systemMessage?: string;
+      hookSpecificOutput?: { additionalContext?: string | string[] };
+    };
+    const rawContext = parsed.hookSpecificOutput?.additionalContext;
+    const additionalContext =
+      rawContext === undefined ? undefined : Array.isArray(rawContext) ? rawContext : [rawContext];
+
+    return { systemMessage: parsed.systemMessage, additionalContext };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Creates a HookGroup from an EnhancedHookChunk.
+ *
+ * @param chunk - The hook chunk to transform
+ * @returns HookGroup with the hook's execution details
+ */
+function createHookGroup(chunk: EnhancedHookChunk): HookGroup {
+  const { message } = chunk;
+  const attachment = message.hookAttachment;
+  const hookName = attachment?.hookName ?? 'unknown';
+  const hookEvent = attachment?.hookEvent ?? 'unknown';
+
+  if (attachment?.type === 'hook_success') {
+    const { systemMessage, additionalContext } = parseHookStdout(attachment.stdout);
+    return {
+      id: chunk.id,
+      message,
+      timestamp: chunk.startTime,
+      hookName,
+      hookEvent,
+      status: 'success',
+      command: attachment.command,
+      stdout: attachment.stdout,
+      stderr: attachment.stderr,
+      exitCode: attachment.exitCode,
+      durationMs: attachment.durationMs,
+      systemMessage,
+      additionalContext,
+    };
+  }
+
+  return {
+    id: chunk.id,
+    message,
+    timestamp: chunk.startTime,
+    hookName,
+    hookEvent,
+    status: 'cancelled',
   };
 }
 

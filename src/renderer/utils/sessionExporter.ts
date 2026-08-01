@@ -176,6 +176,17 @@ function formatChunkPlainText(chunk: Chunk): string[] {
       lines.push('[Context compacted]');
       break;
     }
+    case 'hook': {
+      const attachment = chunk.message.hookAttachment;
+      if (attachment?.type === 'hook_success') {
+        lines.push(`HOOK: ${attachment.hookName} (exit ${attachment.exitCode})`);
+        if (attachment.stdout) lines.push(`  stdout: ${attachment.stdout}`);
+        if (attachment.stderr) lines.push(`  stderr: ${attachment.stderr}`);
+      } else if (attachment?.type === 'hook_cancelled') {
+        lines.push(`HOOK: ${attachment.hookName} (cancelled)`);
+      }
+      break;
+    }
   }
 
   return lines;
@@ -274,6 +285,32 @@ function formatChunkMarkdown(chunk: Chunk, turnNum: number): string[] {
       lines.push('');
       lines.push('*Context compacted*');
       lines.push('');
+      break;
+    }
+    case 'hook': {
+      const attachment = chunk.message.hookAttachment;
+      if (attachment?.type === 'hook_success') {
+        lines.push(`### Hook: ${attachment.hookName} (Turn ${turnNum})`);
+        lines.push('');
+        lines.push(`Exit code: ${attachment.exitCode}`);
+        if (attachment.stdout) {
+          lines.push('');
+          lines.push('```');
+          lines.push(attachment.stdout);
+          lines.push('```');
+        }
+        if (attachment.stderr) {
+          lines.push('');
+          lines.push('**stderr:**');
+          lines.push('```');
+          lines.push(attachment.stderr);
+          lines.push('```');
+        }
+        lines.push('');
+      } else if (attachment?.type === 'hook_cancelled') {
+        lines.push(`*Hook cancelled: ${attachment.hookName}*`);
+        lines.push('');
+      }
       break;
     }
   }

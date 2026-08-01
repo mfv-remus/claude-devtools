@@ -18,7 +18,8 @@ type EntryType =
   | 'system'
   | 'summary'
   | 'file-history-snapshot'
-  | 'queue-operation';
+  | 'queue-operation'
+  | 'attachment';
 
 type ContentType = 'text' | 'thinking' | 'tool_use' | 'tool_result' | 'image';
 
@@ -209,13 +210,79 @@ export interface QueueOperationEntry extends BaseEntry {
   operation: string;
 }
 
+/**
+ * Hook lifecycle events emitted by the Claude Code CLI (not the LLM itself).
+ *
+ * A single hook invocation typically produces up to 3 attachment lines sharing
+ * the same toolUseID:
+ * - hook_success: the raw execution result (command, stdout, stderr, exitCode)
+ * - hook_system_message: systemMessage extracted from the hook's stdout JSON (derived, redundant)
+ * - hook_additional_context: hookSpecificOutput.additionalContext from stdout JSON (derived, redundant)
+ *
+ * hook_system_message/hook_additional_context carry no information beyond what's
+ * already in hook_success.stdout, so only hook_success/hook_cancelled are surfaced
+ * as ParsedMessages (see parseChatHistoryEntry).
+ */
+export interface HookSuccessAttachment {
+  type: 'hook_success';
+  hookName: string;
+  hookEvent: string;
+  toolUseID?: string;
+  content: string;
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  command: string;
+  durationMs: number;
+}
+
+export interface HookCancelledAttachment {
+  type: 'hook_cancelled';
+  hookName: string;
+  hookEvent: string;
+  toolUseID?: string;
+}
+
+export interface HookSystemMessageAttachment {
+  type: 'hook_system_message';
+  content: string;
+  hookName: string;
+  hookEvent: string;
+  toolUseID?: string;
+}
+
+export interface HookAdditionalContextAttachment {
+  type: 'hook_additional_context';
+  content: string[];
+  hookName: string;
+  hookEvent: string;
+  toolUseID?: string;
+}
+
+export type HookAttachment =
+  | HookSuccessAttachment
+  | HookCancelledAttachment
+  | HookSystemMessageAttachment
+  | HookAdditionalContextAttachment;
+
+export interface AttachmentEntry extends BaseEntry {
+  type: 'attachment';
+  parentUuid: string | null;
+  isSidechain?: boolean;
+  cwd?: string;
+  gitBranch?: string;
+  sessionId?: string;
+  attachment: HookAttachment;
+}
+
 export type ChatHistoryEntry =
   | UserEntry
   | AssistantEntry
   | SystemEntry
   | SummaryEntry
   | FileHistorySnapshotEntry
-  | QueueOperationEntry;
+  | QueueOperationEntry
+  | AttachmentEntry;
 
 /**
  * Conversational entries - entries that represent chat messages.

@@ -17,6 +17,7 @@ import {
   type ChatHistoryEntry,
   type ContentBlock,
   EMPTY_METRICS,
+  type HookAttachment,
   isConversationalEntry,
   isParsedUserChunkMessage,
   isTextContent,
@@ -112,6 +113,17 @@ function parseChatHistoryEntry(entry: ChatHistoryEntry): ParsedMessage | null {
     return null;
   }
 
+  // Hook attachments: only hook_success/hook_cancelled carry unique information.
+  // hook_system_message/hook_additional_context are pure derivatives of a preceding
+  // hook_success's stdout JSON (systemMessage / hookSpecificOutput.additionalContext),
+  // so they're dropped here to avoid duplicate display entries.
+  if (entry.type === 'attachment') {
+    const attachmentType = entry.attachment.type;
+    if (attachmentType !== 'hook_success' && attachmentType !== 'hook_cancelled') {
+      return null;
+    }
+  }
+
   // Handle different entry types
   let content: string | ContentBlock[] = '';
   let role: string | undefined;
@@ -128,6 +140,15 @@ function parseChatHistoryEntry(entry: ChatHistoryEntry): ParsedMessage | null {
   let sourceToolAssistantUUID: string | undefined;
   let toolUseResult: Record<string, unknown> | undefined;
   let parentUuid: string | null = null;
+  let hookAttachment: HookAttachment | undefined;
+
+  if (entry.type === 'attachment') {
+    cwd = entry.cwd;
+    gitBranch = entry.gitBranch;
+    isSidechain = entry.isSidechain ?? false;
+    parentUuid = entry.parentUuid ?? null;
+    hookAttachment = entry.attachment;
+  }
 
   // Extract properties based on entry type
   let isCompactSummary = false;
@@ -190,6 +211,7 @@ function parseChatHistoryEntry(entry: ChatHistoryEntry): ParsedMessage | null {
     sourceToolAssistantUUID,
     toolUseResult,
     requestId,
+    hookAttachment,
   };
 }
 
@@ -210,6 +232,8 @@ function parseMessageType(type?: string): MessageType | null {
       return 'file-history-snapshot';
     case 'queue-operation':
       return 'queue-operation';
+    case 'attachment':
+      return 'attachment';
     default:
       // Unknown types are skipped
       return null;

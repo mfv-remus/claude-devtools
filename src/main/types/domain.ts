@@ -29,13 +29,14 @@ export type MessageType =
   | 'system'
   | 'summary'
   | 'file-history-snapshot'
-  | 'queue-operation';
+  | 'queue-operation'
+  | 'attachment';
 
 /**
  * Message category for chunk building.
- * Used to classify messages into one of four categories for independent chunk creation.
+ * Used to classify messages into one of several categories for independent chunk creation.
  */
-export type MessageCategory = 'user' | 'system' | 'hardNoise' | 'ai' | 'compact';
+export type MessageCategory = 'user' | 'system' | 'hardNoise' | 'ai' | 'compact' | 'hook';
 
 // =============================================================================
 // Project & Session Types
