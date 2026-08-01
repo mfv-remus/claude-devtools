@@ -1,22 +1,6 @@
-# =============================================================================
-# claude-devtools — Docker Compose
-#
-# Quick start:
-#   docker compose up
-#
-# Then open http://localhost:3456 in your browser.
-#
-# Security note:
-#   The standalone server has zero outbound network calls — no telemetry,
-#   no analytics, no auto-updater. For maximum isolation, uncomment
-#   network_mode below.
-# =============================================================================
-
 services:
   claude-devtools:
     build: .
-    ports:
-      - "3456:3456"
     volumes:
       - ${CLAUDE_DIR:-~/.claude}:/data/.claude:ro
     environment:
@@ -25,5 +9,23 @@ services:
       - HOST=0.0.0.0
       - PORT=3456
     restart: unless-stopped
-    # Uncomment for maximum network isolation (no outbound connections):
-    # network_mode: "none"
+    networks:
+      - secure_net
+
+  # Container làm nhiệm vụ "mở cổng" và chuyển tiếp traffic vào mạng cô lập
+  proxy:
+    image: alpine/socat
+    command: tcp-listen:3456,fork,reuseaddr tcp-connect:claude-devtools:3456
+    ports:
+      - "3456:3456"
+    networks:
+      - external_net
+      - secure_net
+    restart: unless-stopped
+
+networks:
+  external_net:
+    driver: bridge
+  secure_net:
+    driver: bridge
+    internal: true
