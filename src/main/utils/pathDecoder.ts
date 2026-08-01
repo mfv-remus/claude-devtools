@@ -161,7 +161,8 @@ export function isValidEncodedPath(encodedName: string): boolean {
 
 /**
  * Validates a project ID that may be either a plain encoded path or
- * a composite subproject ID (`{encodedPath}::{8-char-hex}`).
+ * a composite subproject ID (`{encodedPath}~{subdirName}` or `{encodedPath}~{subdirName}-{8-char-hex}`).
+ * See SubprojectRegistry for how composite IDs are minted.
  *
  * @param projectId - The project ID to validate
  * @returns true if valid
@@ -171,26 +172,26 @@ export function isValidProjectId(projectId: string): boolean {
     return false;
   }
 
-  const sep = projectId.indexOf('::');
+  const sep = projectId.lastIndexOf('~');
   if (sep === -1) {
     // Plain encoded path
     return isValidEncodedPath(projectId);
   }
 
-  // Composite ID: validate base part and hash suffix
+  // Composite ID: validate base part and suffix (sanitized subdir name, optionally with a hash disambiguator)
   const basePart = projectId.slice(0, sep);
-  const hashPart = projectId.slice(sep + 2);
+  const suffixPart = projectId.slice(sep + 1);
 
-  return isValidEncodedPath(basePart) && /^[a-f0-9]{8}$/.test(hashPart);
+  return isValidEncodedPath(basePart) && /^[a-zA-Z0-9_.-]+$/.test(suffixPart);
 }
 
 /**
  * Extract the base directory (encoded path) from a project ID.
- * For composite IDs (`{encoded}::{hash}`), returns the encoded part.
+ * For composite IDs (`{encoded}~{suffix}`), returns the encoded part.
  * For plain IDs, returns the ID as-is.
  */
 export function extractBaseDir(projectId: string): string {
-  const sep = projectId.indexOf('::');
+  const sep = projectId.lastIndexOf('~');
   if (sep !== -1) {
     return projectId.slice(0, sep);
   }

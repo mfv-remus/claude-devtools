@@ -69,7 +69,7 @@ export function initializeNotificationListeners(): () => void {
   const PROJECT_REFRESH_DEBOUNCE_MS = 300;
   const getBaseProjectId = (projectId: string | null | undefined): string | null => {
     if (!projectId) return null;
-    const separatorIndex = projectId.indexOf('::');
+    const separatorIndex = projectId.lastIndexOf('~');
     return separatorIndex >= 0 ? projectId.slice(0, separatorIndex) : projectId;
   };
 

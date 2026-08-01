@@ -314,13 +314,18 @@ export class ProjectScanner {
       for (const [cwdKey, sessions] of cwdGroups) {
         const isDecodedFallback = cwdKey.startsWith('__decoded__');
         const actualCwd = isDecodedFallback ? null : cwdKey;
+        const isRoot = !actualCwd || actualCwd === rootCwd;
 
-        // Register in subproject registry
+        // Register in subproject registry.
+        // The root subproject (matching the project's own directory) gets a fixed
+        // "root" suffix instead of its cwd's basename, which would otherwise just
+        // repeat the project name (e.g. "pjm-workspace~pjm_workspace").
         const sessionIds = sessions.map((s) => s.sessionId);
         const compositeId = subprojectRegistry.register(
           encodedName,
           actualCwd ?? decodedFallback,
-          sessionIds
+          sessionIds,
+          isRoot ? 'root' : undefined
         );
 
         // Compute timestamps
@@ -337,7 +342,7 @@ export class ProjectScanner {
 
         // Build display name
         let displayName: string;
-        if (!actualCwd || actualCwd === rootCwd) {
+        if (isRoot) {
           displayName = baseName;
         } else {
           // Use last segment of cwd for disambiguation
