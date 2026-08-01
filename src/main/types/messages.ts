@@ -16,7 +16,7 @@ import {
 } from '../constants/messageTags';
 
 import { type MessageType, type TokenUsage } from './domain';
-import { type ContentBlock, type ToolUseResultData } from './jsonl';
+import { type ContentBlock, type HookAttachment, type ToolUseResultData } from './jsonl';
 
 // =============================================================================
 // Tool Types
@@ -105,6 +105,8 @@ export interface ParsedMessage {
   isCompactSummary?: boolean;
   /** API request ID for deduplicating streaming entries */
   requestId?: string;
+  /** Hook execution data, present when type === 'attachment' */
+  hookAttachment?: HookAttachment;
 }
 
 // =============================================================================
@@ -357,6 +359,15 @@ export function isParsedHardNoiseMessage(msg: ParsedMessage): boolean {
  */
 export function isParsedCompactMessage(msg: ParsedMessage): boolean {
   return msg.isCompactSummary === true;
+}
+
+/**
+ * Detect hook execution messages (SessionStart, UserPromptSubmit, PostToolUse, etc.).
+ * These are CLI-generated, not LLM-generated - kept as their own category so they
+ * render distinctly from AI/system content.
+ */
+export function isParsedHookMessage(msg: ParsedMessage): boolean {
+  return msg.type === 'attachment' && msg.hookAttachment !== undefined;
 }
 
 /**

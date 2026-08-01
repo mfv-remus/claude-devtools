@@ -25,6 +25,7 @@ import {
   type EnhancedChunk,
   isAIChunk,
   isCompactChunk,
+  isHookChunk,
   isSystemChunk,
   isUserChunk,
   type MessageCategory,
@@ -48,6 +49,7 @@ import { classifyMessages } from '../parsing/MessageClassifier';
 import {
   buildAIChunkFromBuffer,
   buildCompactChunk,
+  buildHookChunk,
   buildSystemChunk,
   buildUserChunk,
 } from './ChunkFactory';
@@ -128,6 +130,15 @@ export class ChunkBuilder {
           chunks.push(buildSystemChunk(message));
           break;
 
+        case 'hook':
+          // Flush any buffered AI messages first
+          if (aiBuffer.length > 0) {
+            chunks.push(buildAIChunkFromBuffer(aiBuffer, subagents, messages));
+            aiBuffer = [];
+          }
+          chunks.push(buildHookChunk(message));
+          break;
+
         case 'ai':
           aiBuffer.push(message);
           break;
@@ -144,8 +155,9 @@ export class ChunkBuilder {
     const aiChunkCount = chunks.filter(isAIChunk).length;
     const systemChunkCount = chunks.filter(isSystemChunk).length;
     const compactChunkCount = chunks.filter(isCompactChunk).length;
+    const hookChunkCount = chunks.filter(isHookChunk).length;
     logger.debug(
-      `Created ${chunks.length} chunks: ${userChunkCount} user, ${aiChunkCount} AI, ${systemChunkCount} system, ${compactChunkCount} compact`
+      `Created ${chunks.length} chunks: ${userChunkCount} user, ${aiChunkCount} AI, ${systemChunkCount} system, ${compactChunkCount} compact, ${hookChunkCount} hook`
     );
 
     return chunks;
@@ -395,6 +407,8 @@ export class ChunkBuilder {
         return 'System';
       case 'compact':
         return 'Compact';
+      case 'hook':
+        return 'Hook';
       default:
         return 'Chunk';
     }

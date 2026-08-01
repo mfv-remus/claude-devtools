@@ -5,6 +5,7 @@
  * - User: Genuine user input (creates UserChunk, renders RIGHT)
  * - System: Command output <local-command-stdout> (creates SystemChunk, renders LEFT)
  * - Compact: Summary messages from conversation compaction
+ * - Hook: CLI-generated hook execution (SessionStart, PostToolUse, etc.), creates HookChunk
  * - Hard Noise: Filtered out entirely (system metadata, caveats, reminders)
  * - AI: All other messages grouped into AIChunks (renders LEFT)
  */
@@ -12,6 +13,7 @@
 import {
   isParsedCompactMessage,
   isParsedHardNoiseMessage,
+  isParsedHookMessage,
   isParsedSystemChunkMessage,
   isParsedUserChunkMessage,
   type MessageCategory,
@@ -37,12 +39,17 @@ export function classifyMessages(messages: ParsedMessage[]): ClassifiedMessage[]
 }
 
 /**
- * Categorize a single message into one of five categories.
+ * Categorize a single message into one of the classification categories.
  */
 function categorizeMessage(message: ParsedMessage): MessageCategory {
   // Check hard noise first (filtered out)
   if (isParsedHardNoiseMessage(message)) {
     return 'hardNoise';
+  }
+
+  // Check hook execution (CLI-generated, not LLM-generated)
+  if (isParsedHookMessage(message)) {
+    return 'hook';
   }
 
   // Check compact summary (before system/user to catch it early)

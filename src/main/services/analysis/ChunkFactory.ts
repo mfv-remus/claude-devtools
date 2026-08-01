@@ -12,6 +12,7 @@
 import {
   type EnhancedAIChunk,
   type EnhancedCompactChunk,
+  type EnhancedHookChunk,
   type EnhancedSystemChunk,
   type EnhancedUserChunk,
   type ParsedMessage,
@@ -84,6 +85,25 @@ export function buildCompactChunk(message: ParsedMessage): EnhancedCompactChunk 
   return {
     id,
     chunkType: 'compact',
+    message,
+    startTime: message.timestamp,
+    endTime: message.timestamp,
+    durationMs: 0,
+    metrics,
+    rawMessages: [message],
+  };
+}
+
+/**
+ * Build a HookChunk from a hook execution attachment message.
+ */
+export function buildHookChunk(message: ParsedMessage): EnhancedHookChunk {
+  const id = generateStableChunkId('hook', message);
+  const metrics = calculateMetrics([message]);
+
+  return {
+    id,
+    chunkType: 'hook',
     message,
     startTime: message.timestamp,
     endTime: message.timestamp,
