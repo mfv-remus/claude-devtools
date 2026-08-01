@@ -22,7 +22,7 @@ import {
   syncFocusedPaneState,
   updatePane,
 } from '../utils/paneHelpers';
-import { getFullResetState } from '../utils/stateResetHelpers';
+import { getFullResetState, getSessionResetState } from '../utils/stateResetHelpers';
 
 import type { AppState, SearchNavigationContext } from '../types';
 import type { PaneLayout } from '@renderer/types/panes';
@@ -55,6 +55,7 @@ export interface TabSlice {
 
   // Project context actions
   setActiveProject: (projectId: string) => void;
+  selectProjectContext: (projectId: string) => void;
 
   // Per-tab UI state actions
   setTabContextPanelVisible: (tabId: string, visible: boolean) => void;
@@ -639,6 +640,39 @@ export const createTabSlice: StateCreator<AppState, [], [], TabSlice> = (set, ge
   setActiveProject: (projectId: string) => {
     set({ activeProjectId: projectId });
     get().selectProject(projectId);
+  },
+
+  // Select a workspace directory by id, resolving repo/worktree grouping if
+  // applicable. Used for URL deep-linking to a bare "/{projectId}" path.
+  selectProjectContext: (projectId: string) => {
+    const state = get();
+
+    for (const repo of state.repositoryGroups) {
+      const worktree = repo.worktrees.find((wt) => wt.id === projectId);
+      if (worktree) {
+        set({
+          selectedRepositoryId: repo.id,
+          selectedWorktreeId: worktree.id,
+          selectedProjectId: worktree.id,
+          activeProjectId: worktree.id,
+          sidebarCollapsed: false,
+          ...getSessionResetState(),
+        });
+        void state.fetchSessionsInitial(worktree.id);
+        return;
+      }
+    }
+
+    const project = state.projects.find((p) => p.id === projectId);
+    if (project) {
+      set({
+        activeProjectId: project.id,
+        selectedProjectId: project.id,
+        sidebarCollapsed: false,
+        ...getSessionResetState(),
+      });
+      void state.fetchSessionsInitial(project.id);
+    }
   },
 
   // Navigate to a session (from search or other sources)

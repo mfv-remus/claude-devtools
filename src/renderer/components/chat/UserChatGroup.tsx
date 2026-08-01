@@ -326,12 +326,20 @@ const UserChatGroupInner = ({ userGroup }: Readonly<UserChatGroupProps>): React.
   const [isManuallyExpanded, setIsManuallyExpanded] = useState(false);
   const [validatedPaths, setValidatedPaths] = useState<Record<string, boolean>>({});
 
-  // Get projectPath from per-tab session data, falling back to global state
+  // Get projectPath/sessionId/projectId from per-tab session data, falling back to global state
   const { tabId } = useTabUI();
   const projectPath = useStore((s) => {
     const td = tabId ? s.tabSessionData[tabId] : null;
     return (td?.sessionDetail ?? s.sessionDetail)?.session?.projectPath;
   });
+  const { sessionId, projectId } = useStore(
+    useShallow((s) => {
+      const td = tabId ? s.tabSessionData[tabId] : null;
+      const session = (td?.sessionDetail ?? s.sessionDetail)?.session;
+      return { sessionId: session?.id, projectId: session?.projectId };
+    })
+  );
+  const drillDownSubagent = useStore((s) => s.drillDownSubagent);
 
   // Get search state for highlighting — only re-render if THIS item has matches
   const { searchQuery, searchMatches, currentSearchIndex } = useStore(
@@ -500,19 +508,16 @@ const UserChatGroupInner = ({ userGroup }: Readonly<UserChatGroupProps>): React.
             const exitMatch = /\(exit code (\d+)\)/.exec(notif.summary);
             const exitCode = exitMatch?.[1];
 
-            return (
-              <div
-                key={notif.taskId}
-                className="flex items-start gap-2.5 rounded-lg px-3 py-2"
-                style={{
-                  backgroundColor: 'var(--card-bg)',
-                  border: '1px solid var(--card-border)',
-                }}
-              >
-                <StatusIcon
-                  className="mt-0.5 size-3.5 shrink-0"
-                  style={{ color: statusColor }}
-                />
+            // Only forked-skill/subagent notifications ("Agent \"...\" finished") have a
+            // subagents/agent-{taskId}.jsonl transcript to open. Background Bash commands
+            // ("Background command \"...\" completed") have no such file.
+            const isSubagentNotification = notif.summary.startsWith('Agent "');
+            const canOpenDetail =
+              isSubagentNotification && !!notif.taskId && !!sessionId && !!projectId;
+
+            const cardContent = (
+              <>
+                <StatusIcon className="mt-0.5 size-3.5 shrink-0" style={{ color: statusColor }} />
                 <div className="min-w-0 flex-1 space-y-0.5">
                   <div
                     className="text-xs font-medium leading-snug"
@@ -520,7 +525,10 @@ const UserChatGroupInner = ({ userGroup }: Readonly<UserChatGroupProps>): React.
                   >
                     {cmdName}
                   </div>
-                  <div className="flex items-center gap-2 text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
+                  <div
+                    className="flex items-center gap-2 text-[10px]"
+                    style={{ color: 'var(--color-text-muted)' }}
+                  >
                     <span className="capitalize">{notif.status}</span>
                     {exitCode != null && <span>exit {exitCode}</span>}
                     {notif.outputFile && (
@@ -531,6 +539,35 @@ const UserChatGroupInner = ({ userGroup }: Readonly<UserChatGroupProps>): React.
                     )}
                   </div>
                 </div>
+              </>
+            );
+
+            if (canOpenDetail) {
+              return (
+                <button
+                  key={notif.taskId}
+                  onClick={() => drillDownSubagent(projectId, sessionId, notif.taskId, cmdName)}
+                  className="flex w-full items-start gap-2.5 rounded-lg px-3 py-2 text-left transition-colors hover:brightness-110"
+                  style={{
+                    backgroundColor: 'var(--card-bg)',
+                    border: '1px solid var(--card-border)',
+                  }}
+                >
+                  {cardContent}
+                </button>
+              );
+            }
+
+            return (
+              <div
+                key={notif.taskId}
+                className="flex items-start gap-2.5 rounded-lg px-3 py-2"
+                style={{
+                  backgroundColor: 'var(--card-bg)',
+                  border: '1px solid var(--card-border)',
+                }}
+              >
+                {cardContent}
               </div>
             );
           })}
