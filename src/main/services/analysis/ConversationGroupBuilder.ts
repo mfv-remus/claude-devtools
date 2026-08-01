@@ -18,6 +18,7 @@ import {
   type ToolExecution,
 } from '@main/types';
 import { calculateMetrics } from '@main/utils/jsonl';
+import { isSubagentSpawnToolName } from '@shared/utils/toolNames';
 
 /**
  * Build conversation groups using simplified grouping strategy.
@@ -138,7 +139,7 @@ function separateTaskExecutions(
 
       // Check if this is a Task call with a subagent
       const subagent = taskIdToSubagent.get(msg.sourceToolUseID);
-      if (callInfo.call.name === 'Task' && subagent) {
+      if (isSubagentSpawnToolName(callInfo.call.name) && subagent) {
         // This is a Task execution
         taskExecutions.push({
           taskCall: callInfo.call,

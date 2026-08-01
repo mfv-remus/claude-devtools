@@ -124,9 +124,10 @@ export function getToolSummary(toolName: string, input: Record<string, unknown>)
       return patternStr;
     }
 
-    case 'Task': {
+    case 'Task':
+    case 'Agent': {
       const prompt = input.prompt as string | undefined;
-      const subagentType = input.subagentType as string | undefined;
+      const subagentType = input.subagent_type as string | undefined;
       const description = input.description as string | undefined;
 
       const desc = description ?? prompt;
@@ -136,7 +137,7 @@ export function getToolSummary(toolName: string, input: Record<string, unknown>)
         return `${typeStr}${truncate(desc, 40)}`;
       }
 
-      return subagentType ?? 'Task';
+      return subagentType ?? toolName;
     }
 
     case 'LSP': {

@@ -4,6 +4,7 @@
  * Responsibilities:
  * - Find subagent JSONL files in {sessionId}/subagents/ directory
  * - Parse each subagent file
+ * - Read sidecar `.meta.json` files for authoritative agentType/description
  * - Calculate start/end times and metrics
  * - Detect parallel execution (100ms overlap threshold)
  * - Link subagents to parent Task tool calls
@@ -20,6 +21,15 @@ const logger = createLogger('Discovery:SubagentResolver');
 
 /** Parallel detection window in milliseconds */
 const PARALLEL_WINDOW_MS = 100;
+
+/**
+ * Shape of the sidecar `agent-{id}.meta.json` file Claude Code writes next to a
+ * subagent's `.jsonl` file. Only the fields we consume are declared here.
+ */
+interface SubagentMetaFile {
+  agentType?: string;
+  description?: string;
+}
 
 export class SubagentResolver {
   private projectScanner: ProjectScanner;
@@ -118,6 +128,11 @@ export class SubagentResolver {
       // Check if subagent is still in progress
       const isOngoing = checkMessagesOngoing(messages);
 
+      // Read sidecar meta file for authoritative agentType/description.
+      // This is the only source of type info for subagents with no linkable Task call
+      // (e.g. forked sessions), and takes precedence over the Task-call heuristic otherwise.
+      const meta = await this.readSubagentMeta(filePath);
+
       return {
         id: agentId,
         filePath,
@@ -128,9 +143,33 @@ export class SubagentResolver {
         metrics,
         isParallel: false, // Will be set by detectParallelExecution
         isOngoing,
+        subagentType: meta?.agentType,
+        description: meta?.description,
       };
     } catch (error) {
       logger.error(`Error parsing subagent file ${filePath}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Read the sidecar `.meta.json` file for a subagent, if present.
+   * Returns null when the file is missing or fails to parse (older sessions predate it).
+   * Public so callers building standalone subagent views (e.g. the drill-down detail
+   * builder) can reuse it without going through full subagent resolution.
+   */
+  async readSubagentMeta(jsonlFilePath: string): Promise<SubagentMetaFile | null> {
+    const metaPath = jsonlFilePath.replace(/\.jsonl$/, '.meta.json');
+    const fsProvider = this.projectScanner.getFileSystemProvider();
+
+    try {
+      if (!(await fsProvider.exists(metaPath))) {
+        return null;
+      }
+      const raw = await fsProvider.readFile(metaPath, 'utf8');
+      return JSON.parse(raw) as SubagentMetaFile;
+    } catch (error) {
+      logger.warn(`Failed to read subagent meta file ${metaPath}:`, error);
       return null;
     }
   }
@@ -311,12 +350,14 @@ export class SubagentResolver {
   /**
    * Enrich a subagent with metadata from its parent Task call.
    * Intentionally mutates the subagent in place for consistency with other resolution methods.
+   * Does not overwrite description/subagentType already sourced from the meta.json sidecar,
+   * since that file is the more authoritative source when present.
    */
   private enrichSubagentFromTask(subagent: Process, taskCall: ToolCall): void {
     /* eslint-disable no-param-reassign -- Mutation is intentional; subagent is enriched in place */
     subagent.parentTaskId = taskCall.id;
-    subagent.description = taskCall.taskDescription;
-    subagent.subagentType = taskCall.taskSubagentType;
+    subagent.description = subagent.description ?? taskCall.taskDescription;
+    subagent.subagentType = subagent.subagentType ?? taskCall.taskSubagentType;
 
     // Extract team metadata from Task call input
     const teamName = taskCall.input?.team_name as string | undefined;

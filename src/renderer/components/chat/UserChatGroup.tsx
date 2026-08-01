@@ -27,6 +27,10 @@ const logger = createLogger('Component:UserChatGroup');
 // Pattern for @paths only (file references)
 const PATH_PATTERN = /@([^\s,)}\]]+)/g;
 
+// Stable empty-map reference so the useStore selector doesn't create a new
+// object identity on every call when no subagentTypeById map is available yet.
+const EMPTY_SUBAGENT_TYPE_MAP = new Map<string, string>();
+
 interface UserChatGroupProps {
   userGroup: UserGroup;
 }
@@ -341,6 +345,15 @@ const UserChatGroupInner = ({ userGroup }: Readonly<UserChatGroupProps>): React.
   );
   const drillDownSubagent = useStore((s) => s.drillDownSubagent);
 
+  // The <task-notification> tag Claude Code emits only carries taskId/status/summary/outputFile
+  // (its <task-id> is the subagent's own agentId, e.g. "agent-{id}.jsonl" minus the prefix — not
+  // the parent Task tool_use ID), so look up subagentType from the derived per-tab map instead
+  // (sessionDetail.processes itself is stripped to save memory — see sessionDetailSlice).
+  const subagentTypeById = useStore((s) => {
+    const td = tabId ? s.tabSessionData[tabId] : null;
+    return td?.subagentTypeById ?? s.subagentTypeById ?? EMPTY_SUBAGENT_TYPE_MAP;
+  });
+
   // Get search state for highlighting — only re-render if THIS item has matches
   const { searchQuery, searchMatches, currentSearchIndex } = useStore(
     useShallow((s) => {
@@ -514,16 +527,32 @@ const UserChatGroupInner = ({ userGroup }: Readonly<UserChatGroupProps>): React.
             const isSubagentNotification = notif.summary.startsWith('Agent "');
             const canOpenDetail =
               isSubagentNotification && !!notif.taskId && !!sessionId && !!projectId;
+            const subagentType = isSubagentNotification
+              ? subagentTypeById.get(notif.taskId)
+              : undefined;
 
             const cardContent = (
               <>
                 <StatusIcon className="mt-0.5 size-3.5 shrink-0" style={{ color: statusColor }} />
                 <div className="min-w-0 flex-1 space-y-0.5">
-                  <div
-                    className="text-xs font-medium leading-snug"
-                    style={{ color: 'var(--color-text-secondary)' }}
-                  >
-                    {cmdName}
+                  <div className="flex items-center gap-1.5">
+                    {subagentType && (
+                      <span
+                        className="shrink-0 rounded px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide"
+                        style={{
+                          backgroundColor: 'var(--badge-neutral-bg)',
+                          color: 'var(--badge-neutral-text)',
+                        }}
+                      >
+                        {subagentType}
+                      </span>
+                    )}
+                    <div
+                      className="truncate text-xs font-medium leading-snug"
+                      style={{ color: 'var(--color-text-secondary)' }}
+                    >
+                      {cmdName}
+                    </div>
                   </div>
                   <div
                     className="flex items-center gap-2 text-[10px]"

@@ -52,7 +52,7 @@ import type {
   ContextStats,
   MentionedFileInfo,
 } from '@renderer/types/contextInjection';
-import type { ClaudeMdFileInfo, SessionDetail } from '@renderer/types/data';
+import type { ClaudeMdFileInfo, Process, SessionDetail } from '@renderer/types/data';
 import type { AIGroup, SessionConversation } from '@renderer/types/groups';
 import type { AgentConfig } from '@shared/types/api';
 import type { StateCreator } from 'zustand';
@@ -72,6 +72,8 @@ export interface TabSessionData {
   sessionPhaseInfo: ContextPhaseInfo | null;
   visibleAIGroupId: string | null;
   selectedAIGroup: AIGroup | null;
+  /** agentId -> subagentType, captured before `processes` is dropped from sessionDetail to save memory */
+  subagentTypeById: Map<string, string> | null;
 }
 
 function createEmptyTabSessionData(): TabSessionData {
@@ -86,7 +88,23 @@ function createEmptyTabSessionData(): TabSessionData {
     sessionPhaseInfo: null,
     visibleAIGroupId: null,
     selectedAIGroup: null,
+    subagentTypeById: null,
   };
+}
+
+/**
+ * Build an agentId -> subagentType lookup from resolved processes.
+ * Must run before `processes` is stripped from sessionDetail (see slimDetail below) —
+ * that stripping frees GBs of transcript data for long sessions, but the notification
+ * cards in UserChatGroup still need subagentType by id, so we keep this tiny derived map.
+ */
+function buildSubagentTypeById(processes: Process[] | undefined): Map<string, string> | null {
+  if (!processes || processes.length === 0) return null;
+  const map = new Map<string, string>();
+  for (const p of processes) {
+    if (p.subagentType) map.set(p.id, p.subagentType);
+  }
+  return map.size > 0 ? map : null;
 }
 
 // =============================================================================
@@ -116,6 +134,9 @@ export interface SessionDetailSlice {
   // Visible AI Group
   visibleAIGroupId: string | null;
   selectedAIGroup: AIGroup | null;
+
+  /** agentId -> subagentType, captured before `processes` is dropped from sessionDetail */
+  subagentTypeById: Map<string, string> | null;
 
   // Per-tab session data (keyed by tabId)
   tabSessionData: Record<string, TabSessionData>;
@@ -158,6 +179,8 @@ export const createSessionDetailSlice: StateCreator<AppState, [], [], SessionDet
 
   visibleAIGroupId: null,
   selectedAIGroup: null,
+
+  subagentTypeById: null,
 
   // Per-tab session data
   tabSessionData: {},
@@ -211,6 +234,9 @@ export const createSessionDetailSlice: StateCreator<AppState, [], [], SessionDet
         detail && enhancedChunks
           ? transformChunksToConversation(enhancedChunks, detail.processes, isOngoing)
           : null;
+
+      // Capture agentId -> subagentType before processes is dropped below.
+      const subagentTypeById = buildSubagentTypeById(detail?.processes);
 
       // Free the raw chunk arrays — they are not needed after conversation is built.
       // Storing them would hold GBs of data for long sessions. Export re-fetches on demand.
@@ -281,6 +307,7 @@ export const createSessionDetailSlice: StateCreator<AppState, [], [], SessionDet
         sessionClaudeMdStats: null,
         sessionContextStats: null,
         sessionPhaseInfo: null,
+        subagentTypeById,
       });
 
       // Auto-expand all AI groups if the setting is enabled
@@ -309,6 +336,7 @@ export const createSessionDetailSlice: StateCreator<AppState, [], [], SessionDet
               sessionPhaseInfo: null,
               visibleAIGroupId: firstAIGroupId,
               selectedAIGroup: firstAIGroup,
+              subagentTypeById,
             },
           },
         });
@@ -614,6 +642,9 @@ export const createSessionDetailSlice: StateCreator<AppState, [], [], SessionDet
       }
       sessionChunkFingerprint.set(refreshKey, fingerprint);
 
+      // Capture agentId -> subagentType before processes is dropped below.
+      const subagentTypeById = buildSubagentTypeById(detail.processes);
+
       // ---------------------------------------------------------------
       // Early release: null out raw data from IPC before transformation
       // to reduce peak memory (detail + enhancedChunks + newConversation).
@@ -676,6 +707,7 @@ export const createSessionDetailSlice: StateCreator<AppState, [], [], SessionDet
       // Update only the data, preserve UI states
       set((state) => ({
         sessionDetail: slimDetail,
+        subagentTypeById,
         conversation: newConversation,
         // Update on latest sessions state to avoid restoring stale sidebar snapshots.
         sessions: state.sessions.map((s) =>
@@ -737,6 +769,7 @@ export const createSessionDetailSlice: StateCreator<AppState, [], [], SessionDet
           latestTabSessionData[tab.id] = {
             ...tabData,
             sessionDetail: slimDetail,
+            subagentTypeById,
             conversation: newConversation,
             ...(tabGroupStillExists ? { selectedAIGroup: tabSelectedGroup } : {}),
           };
