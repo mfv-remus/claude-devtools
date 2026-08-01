@@ -438,6 +438,8 @@ export interface SubagentDetail {
   id: string;
   /** Task description */
   description: string;
+  /** Subagent type (e.g. "Explore", "general-purpose", or a custom skill agent name) */
+  subagentType?: string;
   /** Subagent's chunks with semantic breakdown */
   chunks: EnhancedChunk[];
   /** Semantic step groups for visualization */

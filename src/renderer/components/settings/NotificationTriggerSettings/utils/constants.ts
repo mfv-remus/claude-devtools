@@ -24,6 +24,7 @@ export const TOOL_NAME_OPTIONS: { value: TriggerToolName; label: string }[] = [
   { value: '', label: 'Any Tool' },
   { value: 'Bash', label: 'Bash' },
   { value: 'Task', label: 'Task' },
+  { value: 'Agent', label: 'Agent' },
   { value: 'Read', label: 'Read' },
   { value: 'Write', label: 'Write' },
   { value: 'Edit', label: 'Edit' },

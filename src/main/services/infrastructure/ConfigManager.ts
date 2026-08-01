@@ -56,6 +56,7 @@ export type TriggerContentType = 'tool_result' | 'tool_use' | 'thinking' | 'text
 const KNOWN_TOOL_NAMES = [
   'Bash',
   'Task',
+  'Agent',
   'TodoWrite',
   'Read',
   'Write',

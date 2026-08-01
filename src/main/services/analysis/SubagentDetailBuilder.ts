@@ -67,6 +67,10 @@ export async function buildSubagentDetail(
     // Parse subagent JSONL file
     const parsedSession = await sessionParser.parseSessionFile(subagentPath);
 
+    // Sidecar meta.json is the authoritative source for agentType/description —
+    // same file SubagentResolver reads when resolving subagents for the main chat view.
+    const meta = await subagentResolver.readSubagentMeta(subagentPath);
+
     // A subagent's own messages are all tagged isSidechain: true (relative to the parent
     // session), but buildChunksFn filters to `!isSidechain` assuming a top-level session's
     // main thread. From this subagent's own perspective its messages ARE the main thread,
@@ -83,9 +87,10 @@ export async function buildSubagentDetail(
     // Build chunks with semantic steps
     const chunks = buildChunksFn(messages, nestedSubagents);
 
-    // Extract description (try to get from first user message)
-    let description = 'Subagent';
-    if (parsedSession.messages.length > 0) {
+    // Extract description: meta.json is authoritative when present, otherwise fall
+    // back to the first user message (older sessions predate the meta.json sidecar).
+    let description = meta?.description ?? 'Subagent';
+    if (!meta?.description && parsedSession.messages.length > 0) {
       const firstUserMsg = parsedSession.messages.find(
         (m) => m.type === 'user' && typeof m.content === 'string'
       );
@@ -125,6 +130,7 @@ export async function buildSubagentDetail(
     return {
       id: subagentId,
       description,
+      subagentType: meta?.agentType,
       chunks,
       semanticStepGroups,
       startTime,

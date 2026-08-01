@@ -5,6 +5,7 @@
  */
 
 import { parseAllTeammateMessages } from '@shared/utils/teammateMessageParser';
+import { isSubagentSpawnToolName } from '@shared/utils/toolNames';
 
 import { estimateTokens, formatToolInput, formatToolResult, toDate } from './aiGroupHelpers';
 import { extractSlashes, type PrecedingSlashInfo } from './slashCommandExtractor';
@@ -161,10 +162,10 @@ export function buildDisplayItems(
       case 'tool_call': {
         const linkedTool = linkedTools.get(step.id);
         if (linkedTool) {
-          // Skip Task tool calls that have associated subagents
-          // The subagent will be shown separately, so showing the Task call is redundant
+          // Skip Task/Agent tool calls that have associated subagents
+          // The subagent will be shown separately, so showing the raw call is redundant
           const isTaskWithSubagent =
-            linkedTool.name === 'Task' && taskIdsWithSubagents.has(step.id);
+            isSubagentSpawnToolName(linkedTool.name) && taskIdsWithSubagents.has(step.id);
           if (!isTaskWithSubagent) {
             displayItems.push({
               type: 'tool',
@@ -425,8 +426,7 @@ export function buildDisplayItemsFromMessages(
       }
       // Only treat as subagent input if there are NO tool_result blocks in this message
       const hasToolResults =
-        Array.isArray(msg.content) &&
-        msg.content.some((b) => b.type === 'tool_result');
+        Array.isArray(msg.content) && msg.content.some((b) => b.type === 'tool_result');
       if (rawText.trim() && !hasToolResults) {
         displayItems.push({
           type: 'subagent_input',
@@ -513,9 +513,9 @@ export function buildDisplayItemsFromMessages(
   for (const [toolId, call] of toolCallsById.entries()) {
     const result = toolResultsById.get(toolId);
 
-    // Skip Task tool calls that have associated subagents
-    // The subagent will be shown separately, so showing the Task call is redundant
-    const isTaskWithSubagent = call.name === 'Task' && taskIdsWithSubagents.has(toolId);
+    // Skip Task/Agent tool calls that have associated subagents
+    // The subagent will be shown separately, so showing the raw call is redundant
+    const isTaskWithSubagent = isSubagentSpawnToolName(call.name) && taskIdsWithSubagents.has(toolId);
     if (isTaskWithSubagent) {
       continue;
     }

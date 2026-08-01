@@ -66,14 +66,15 @@ export function getToolSummary(toolName: string, input: Record<string, unknown>)
       return toolName;
     }
 
-    case 'Task': {
+    case 'Task':
+    case 'Agent': {
       const description = input.description as string | undefined;
       const prompt = input.prompt as string | undefined;
       const subagentType = input.subagent_type as string | undefined;
       const desc = description ?? prompt;
       const typeStr = subagentType ? `${subagentType} - ` : '';
       if (desc) return `${typeStr}${truncate(desc, 40)}`;
-      return subagentType ?? 'Task';
+      return subagentType ?? toolName;
     }
 
     case 'Skill': {

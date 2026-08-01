@@ -73,9 +73,22 @@ export const SubagentDetailModal = (): React.JSX.Element | null => {
           style={{ borderColor: 'var(--color-border)' }}
         >
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-              {detail?.description ?? 'Subagent detail'}
-            </h2>
+            <div className="flex items-center gap-2">
+              {detail?.subagentType && (
+                <span
+                  className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide"
+                  style={{
+                    backgroundColor: 'var(--badge-neutral-bg)',
+                    color: 'var(--badge-neutral-text)',
+                  }}
+                >
+                  {detail.subagentType}
+                </span>
+              )}
+              <h2 className="truncate text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                {detail?.description ?? 'Subagent detail'}
+              </h2>
+            </div>
             {detail && (
               <div
                 className="mt-1 flex items-center gap-3 font-mono text-[11px] tabular-nums"
