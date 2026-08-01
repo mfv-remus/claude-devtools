@@ -41,6 +41,16 @@ describe('modelParser', () => {
       });
     });
 
+    it('should parse new format without minor or date: claude-opus-5', () => {
+      const result = parseModelString('claude-opus-5');
+      expect(result).toEqual({
+        name: 'opus5',
+        family: 'opus',
+        majorVersion: 5,
+        minorVersion: null,
+      });
+    });
+
     it('should parse new format without date: claude-opus-4-6', () => {
       const result = parseModelString('claude-opus-4-6');
       expect(result).toEqual({
