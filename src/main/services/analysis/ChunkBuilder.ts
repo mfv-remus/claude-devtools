@@ -418,7 +418,7 @@ export class ChunkBuilder {
    * Used for drill-down modal to show subagent's internal execution.
    *
    * @param projectId - Project ID
-   * @param sessionId - Parent session ID (currently unused, kept for API consistency)
+   * @param sessionId - Parent session ID (used to locate the session-scoped subagents directory)
    * @param subagentId - Subagent ID to load
    * @param sessionParser - SessionParser instance for parsing subagent file
    * @param subagentResolver - SubagentResolver instance for nested subagents

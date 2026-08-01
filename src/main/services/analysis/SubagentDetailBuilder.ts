@@ -14,6 +14,7 @@ import {
   type SemanticStepGroup,
   type SubagentDetail,
 } from '@main/types';
+import { buildSubagentsPath } from '@main/utils/pathDecoder';
 import { countTokens } from '@main/utils/tokenizer';
 import { createLogger } from '@shared/utils/logger';
 import * as path from 'path';
@@ -31,7 +32,7 @@ import type { SessionParser } from '../parsing/SessionParser';
  * Used for drill-down modal to show subagent's internal execution.
  *
  * @param projectId - Project ID
- * @param _sessionId - Parent session ID (currently unused, kept for API consistency)
+ * @param sessionId - Parent session ID (used to locate the session-scoped subagents directory)
  * @param subagentId - Subagent ID to load
  * @param sessionParser - SessionParser instance for parsing subagent file
  * @param subagentResolver - SubagentResolver instance for nested subagents
@@ -42,7 +43,7 @@ import type { SessionParser } from '../parsing/SessionParser';
  */
 export async function buildSubagentDetail(
   projectId: string,
-  _sessionId: string, // Unused but kept for API consistency
+  sessionId: string,
   subagentId: string,
   sessionParser: SessionParser,
   subagentResolver: SubagentResolver,
@@ -51,11 +52,9 @@ export async function buildSubagentDetail(
   projectsDir: string
 ): Promise<SubagentDetail | null> {
   try {
-    // Construct path to subagent JSONL file
+    // Construct path to subagent JSONL file (session-scoped subagents/ directory)
     const subagentPath = path.join(
-      projectsDir,
-      projectId,
-      'subagents',
+      buildSubagentsPath(projectsDir, projectId, sessionId),
       `agent-${subagentId}.jsonl`
     );
 
@@ -68,6 +67,12 @@ export async function buildSubagentDetail(
     // Parse subagent JSONL file
     const parsedSession = await sessionParser.parseSessionFile(subagentPath);
 
+    // A subagent's own messages are all tagged isSidechain: true (relative to the parent
+    // session), but buildChunksFn filters to `!isSidechain` assuming a top-level session's
+    // main thread. From this subagent's own perspective its messages ARE the main thread,
+    // so clear the flag before chunking or every message gets filtered out.
+    const messages = parsedSession.messages.map((m) => ({ ...m, isSidechain: false }));
+
     // Resolve nested subagents within this subagent
     const nestedSubagents = await subagentResolver.resolveSubagents(
       projectId,
@@ -76,7 +81,7 @@ export async function buildSubagentDetail(
     );
 
     // Build chunks with semantic steps
-    const chunks = buildChunksFn(parsedSession.messages, nestedSubagents);
+    const chunks = buildChunksFn(messages, nestedSubagents);
 
     // Extract description (try to get from first user message)
     let description = 'Subagent';

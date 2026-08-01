@@ -48,3 +48,5 @@ claude-dev.tools/*
 
 eslint-fix/
 remotion/*
+
+.playwright-mcp/

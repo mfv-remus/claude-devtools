@@ -97,8 +97,14 @@ export class HttpServer {
     if (rendererPath) {
       logger.info(`Serving static files from: ${rendererPath}`);
 
-      // Cache index.html for SPA fallback
+      // Cache index.html for SPA fallback.
+      // Built assets use relative paths ("./assets/...") which only resolve
+      // correctly when served from "/". Deep links like "/{projectId}/{sessionId}"
+      // are served via this fallback at a nested path, so rewrite asset
+      // references to be root-absolute here (the on-disk file is left untouched,
+      // which matters for Electron's file:// loadFile of the same build output).
       const indexHtml = readFileSync(join(rendererPath, 'index.html'), 'utf-8');
+      const indexHtmlForFallback = indexHtml.replace(/(href|src)="\.\//g, '$1="/');
 
       await this.app.register(fastifyStatic, {
         root: rendererPath,
@@ -114,7 +120,7 @@ export class HttpServer {
         if (request.url.startsWith('/api/')) {
           return reply.status(404).send({ error: 'Not found' });
         }
-        return reply.type('text/html').send(indexHtml);
+        return reply.type('text/html').send(indexHtmlForFallback);
       });
     } else {
       logger.warn('Renderer output directory not found (run `pnpm build` first), serving API only');
