@@ -8,6 +8,7 @@ import { parseAllTeammateMessages } from '@shared/utils/teammateMessageParser';
 import { isSubagentSpawnToolName } from '@shared/utils/toolNames';
 
 import { estimateTokens, formatToolInput, formatToolResult, toDate } from './aiGroupHelpers';
+import { buildHookGroupFromStep } from './hookUtils';
 import { extractSlashes, type PrecedingSlashInfo } from './slashCommandExtractor';
 import { linkToolCallsToResults } from './toolLinkingEngine';
 
@@ -33,6 +34,8 @@ function getDisplayItemTimestamp(item: AIGroupDisplayItem): Date {
     case 'subagent_input':
     case 'compact_boundary':
       return toDate(item.timestamp);
+    case 'hook':
+      return toDate(item.hook.timestamp);
   }
 }
 
@@ -211,6 +214,13 @@ export function buildDisplayItems(
             tokenCount: estimateTokens(step.content.interruptionText),
           });
         }
+        break;
+
+      case 'hook':
+        displayItems.push({
+          type: 'hook',
+          hook: buildHookGroupFromStep(step),
+        });
         break;
     }
   }

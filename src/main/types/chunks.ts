@@ -240,7 +240,8 @@ export type SemanticStepType =
   | 'tool_result' // Tool result received
   | 'subagent' // Subagent execution
   | 'output' // Main text output
-  | 'interruption'; // User interruption
+  | 'interruption' // User interruption
+  | 'hook'; // CLI hook execution fired mid-turn (e.g. PostToolUse)
 
 /**
  * A semantic step represents a logical unit of work within a response.
@@ -277,6 +278,13 @@ export interface SemanticStep {
     outputText?: string; // For output
     sourceModel?: string; // For tool_call - model from source assistant message
     interruptionText?: string; // For interruption - the interruption message text
+    hookName?: string; // For hook - e.g. "PostToolUse:Edit"
+    hookEvent?: string; // For hook - e.g. "PostToolUse"
+    hookStatus?: 'success' | 'cancelled'; // For hook
+    hookCommand?: string; // For hook - shell command that was executed
+    hookStdout?: string; // For hook
+    hookStderr?: string; // For hook
+    hookExitCode?: number; // For hook
   };
 
   /** Token attribution */

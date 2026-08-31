@@ -241,6 +241,12 @@ export interface HookCancelledAttachment {
   hookName: string;
   hookEvent: string;
   toolUseID?: string;
+  /** Shell command that was in flight when the hook was cancelled, if known */
+  command?: string;
+  /** How long the hook ran before being cancelled, in milliseconds */
+  durationMs?: number;
+  timedOut?: boolean;
+  timeoutMs?: number;
 }
 
 export interface HookSystemMessageAttachment {

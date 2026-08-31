@@ -7,9 +7,9 @@ import {
   type TriggerColor,
 } from '@shared/constants/triggerColors';
 
+import { HookMarker } from './items/HookMarker';
 import { AIChatGroup } from './AIChatGroup';
 import { CompactBoundary } from './CompactBoundary';
-import { HookChatGroup } from './HookChatGroup';
 import { SystemChatGroup } from './SystemChatGroup';
 import { UserChatGroup } from './UserChatGroup';
 
@@ -126,7 +126,11 @@ const ChatHistoryItemInner = ({
     case 'compact':
       return <CompactBoundary compactGroup={item.group} />;
     case 'hook':
-      return <HookChatGroup hookGroup={item.group} />;
+      return (
+        <div className="my-1">
+          <HookMarker hookGroup={item.group} />
+        </div>
+      );
     default:
       return null;
   }

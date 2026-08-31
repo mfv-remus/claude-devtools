@@ -66,6 +66,7 @@ function extractMessageIdFromStep(step: SemanticStep): string | null {
   if (step.type === 'tool_result') return null;
   if (step.type === 'interruption') return null;
   if (step.type === 'tool_call') return null; // Tool calls are standalone
+  if (step.type === 'hook') return null; // Hooks are standalone markers
 
   return null;
 }
@@ -89,6 +90,8 @@ function buildGroupLabel(steps: SemanticStep[]): string {
         return 'Output';
       case 'interruption':
         return 'Interruption';
+      case 'hook':
+        return `Hook: ${step.content.hookName ?? 'unknown'}`;
     }
   }
 

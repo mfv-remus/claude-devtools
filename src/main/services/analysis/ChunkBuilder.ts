@@ -131,12 +131,17 @@ export class ChunkBuilder {
           break;
 
         case 'hook':
-          // Flush any buffered AI messages first
+          // A hook firing mid-turn (e.g. PostToolUse between two tool calls) is kept
+          // inside the active AI buffer instead of flushing it, so SemanticStepExtractor
+          // can render it as an inline marker within that single AI turn rather than
+          // splitting one Claude response into two separate AI chunks/groups.
+          // Only emit a standalone HookChunk when there's no active AI turn to attach to
+          // (e.g. SessionStart before the first message, or UserPromptSubmit/Stop between turns).
           if (aiBuffer.length > 0) {
-            chunks.push(buildAIChunkFromBuffer(aiBuffer, subagents, messages));
-            aiBuffer = [];
+            aiBuffer.push(message);
+          } else {
+            chunks.push(buildHookChunk(message));
           }
-          chunks.push(buildHookChunk(message));
           break;
 
         case 'ai':

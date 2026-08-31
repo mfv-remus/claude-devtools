@@ -124,7 +124,6 @@ export interface SystemGroup {
  */
 export interface HookGroup {
   id: string;
-  message: ParsedMessage;
   timestamp: Date;
   /** Full hook identifier, e.g. "PostToolUse:Write" */
   hookName: string;
@@ -287,7 +286,8 @@ export type AIGroupDisplayItem =
       timestamp: Date;
       tokenDelta?: CompactionTokenDelta;
       phaseNumber: number;
-    };
+    }
+  | { type: 'hook'; hook: HookGroup };
 
 /**
  * The last output in an AI Group - what user sees as "the answer".
