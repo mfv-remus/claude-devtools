@@ -70,6 +70,30 @@ export function extractSemanticStepsFromAIChunk(chunk: AIChunk | EnhancedAIChunk
         continue;
       }
 
+      // A hook's exit code 2 (or equivalent) stopped this turn from continuing -
+      // synthesized from a type: "system", subtype: "informational" entry rather
+      // than a hook_* attachment line (see buildBlockedPromptAttachment).
+      if (attachment.type === 'hook_blocked_prompt') {
+        steps.push({
+          id: msg.uuid,
+          type: 'hook',
+          startTime: new Date(msg.timestamp),
+          endTime: new Date(msg.timestamp),
+          durationMs: 0,
+          content: {
+            hookName: attachment.hookName,
+            hookEvent: attachment.hookEvent,
+            hookStatus: 'blocked',
+            hookExitCode: 2,
+            hookSystemMessage: attachment.content,
+          },
+          context: msg.agentId ? 'subagent' : 'main',
+          agentId: msg.agentId,
+          sourceMessageId: msg.uuid,
+        });
+        continue;
+      }
+
       // Some hooks (e.g. UserPromptExpansion, bare SessionStart/SubagentStart) never emit
       // a hook_success/hook_cancelled line at all - their system message or injected
       // context is the only record of the firing, so it's surfaced directly here.

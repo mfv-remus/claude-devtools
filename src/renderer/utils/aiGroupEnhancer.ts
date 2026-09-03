@@ -54,13 +54,27 @@ export function enhanceAIGroup(
   const linkedTools = linkToolCallsToResults(aiGroup.steps, aiGroup.responses);
   // Attach main session impact tokens to subagents (Task tool call/result tokens)
   attachMainSessionImpact(aiGroup.processes, linkedTools);
-  const displayItems = buildDisplayItems(
+  const rawDisplayItems = buildDisplayItems(
     aiGroup.steps,
     lastOutput,
     aiGroup.processes,
     aiGroup.responses,
     precedingSlash
   );
+
+  // Hooks that fired after lastOutput's timestamp would otherwise render above
+  // LastOutputDisplay (which is always pinned to the bottom) even though they
+  // happened later - pull them out and surface them as trailing items instead.
+  const displayItems: typeof rawDisplayItems = [];
+  const trailingHookItems: EnhancedAIGroup['trailingHookItems'] = [];
+  for (const item of rawDisplayItems) {
+    if (item.type === 'hook' && lastOutput && item.hook.timestamp > lastOutput.timestamp) {
+      trailingHookItems.push(item.hook);
+    } else {
+      displayItems.push(item);
+    }
+  }
+
   const summary = buildSummary(displayItems);
   const mainModel = extractMainModel(aiGroup.steps);
   const subagentModels = extractSubagentModels(aiGroup.processes, mainModel);
@@ -70,6 +84,7 @@ export function enhanceAIGroup(
     lastOutput,
     linkedTools,
     displayItems,
+    trailingHookItems,
     itemsSummary: summary,
     mainModel,
     subagentModels,

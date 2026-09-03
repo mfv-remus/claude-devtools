@@ -280,7 +280,7 @@ export interface SemanticStep {
     interruptionText?: string; // For interruption - the interruption message text
     hookName?: string; // For hook - e.g. "PostToolUse:Edit"
     hookEvent?: string; // For hook - e.g. "PostToolUse"
-    hookStatus?: 'success' | 'cancelled'; // For hook
+    hookStatus?: 'success' | 'cancelled' | 'blocked'; // For hook
     hookCommand?: string; // For hook - shell command that was executed
     hookStdout?: string; // For hook
     hookStderr?: string; // For hook

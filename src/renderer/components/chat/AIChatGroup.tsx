@@ -13,6 +13,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { TokenUsageDisplay } from '../common/TokenUsageDisplay';
 
+import { HookMarker } from './items/HookMarker';
 import { ContextBadge } from './ContextBadge';
 import { DisplayItemList } from './DisplayItemList';
 import { LastOutputDisplay } from './LastOutputDisplay';
@@ -522,6 +523,15 @@ const AIChatGroupInner = ({
           isSessionOngoing={isSessionOngoing}
         />
       </div>
+
+      {/* Hooks that fired after lastOutput (e.g. a hook blocking the next turn) */}
+      {enhanced.trailingHookItems.length > 0 && (
+        <div className="space-y-2">
+          {enhanced.trailingHookItems.map((hook) => (
+            <HookMarker key={hook.id} hookGroup={hook} />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
