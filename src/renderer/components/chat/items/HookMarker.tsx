@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { CODE_BG, COLOR_TEXT_MUTED, COLOR_TEXT_SECONDARY } from '@renderer/constants/cssVariables';
 import { formatDuration } from '@renderer/utils/formatters';
 import { format } from 'date-fns';
-import { AlertCircle, CheckCircle2, CircleSlash, Webhook } from 'lucide-react';
+import { AlertCircle, Ban, CheckCircle2, CircleSlash, Webhook } from 'lucide-react';
 
 import { HookDetailModal } from '../HookDetailModal';
 
@@ -15,6 +15,9 @@ interface HookMarkerProps {
 }
 
 const StatusIcon = ({ hookGroup }: { hookGroup: HookGroup }): React.JSX.Element => {
+  if (hookGroup.status === 'blocked') {
+    return <Ban size={13} style={{ color: 'var(--tool-result-error-text)' }} />;
+  }
   if (hookGroup.status === 'cancelled') {
     return <CircleSlash size={13} style={{ color: COLOR_TEXT_MUTED }} />;
   }
@@ -75,7 +78,9 @@ export const HookMarker = ({ hookGroup }: Readonly<HookMarkerProps>): React.JSX.
           className="shrink-0 whitespace-nowrap text-[11px]"
           style={{ color: COLOR_TEXT_MUTED }}
         >
-          {status === 'cancelled' ? 'cancelled' : formatDuration(durationMs ?? 0)}
+          {status === 'cancelled' && 'cancelled'}
+          {status === 'blocked' && 'blocked'}
+          {status === 'success' && formatDuration(durationMs ?? 0)}
         </span>
         <span
           className="shrink-0 whitespace-nowrap text-[11px]"

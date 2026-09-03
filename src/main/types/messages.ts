@@ -298,8 +298,10 @@ export function isParsedInternalUserMessage(msg: ParsedMessage): boolean {
  * - Synthetic messages with model='<synthetic>' (system-generated placeholders)
  */
 export function isParsedHardNoiseMessage(msg: ParsedMessage): boolean {
-  // Filter structural metadata types - these should never be displayed
-  if (msg.type === 'system') return true;
+  // Filter structural metadata types - these should never be displayed.
+  // Exception: 'informational' system entries carry a hookAttachment (see
+  // buildBlockedPromptAttachment) and are rendered as a hook marker instead.
+  if (msg.type === 'system' && !msg.hookAttachment) return true;
   if (msg.type === 'summary') return true;
   if (msg.type === 'file-history-snapshot') return true;
   if (msg.type === 'queue-operation') return true;
@@ -364,10 +366,12 @@ export function isParsedCompactMessage(msg: ParsedMessage): boolean {
 /**
  * Detect hook execution messages (SessionStart, UserPromptSubmit, PostToolUse, etc.).
  * These are CLI-generated, not LLM-generated - kept as their own category so they
- * render distinctly from AI/system content.
+ * render distinctly from AI/system content. Also matches 'informational' system
+ * entries (a hook blocking the turn via exit code 2), which carry a synthesized
+ * hookAttachment despite being type: 'system' rather than type: 'attachment'.
  */
 export function isParsedHookMessage(msg: ParsedMessage): boolean {
-  return msg.type === 'attachment' && msg.hookAttachment !== undefined;
+  return msg.hookAttachment !== undefined;
 }
 
 /**

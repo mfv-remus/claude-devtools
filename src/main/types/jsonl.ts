@@ -183,9 +183,15 @@ export interface AssistantEntry extends ConversationalEntry {
 
 export interface SystemEntry extends ConversationalEntry {
   type: 'system';
-  subtype: 'turn_duration' | 'init';
-  durationMs: number;
+  subtype: 'turn_duration' | 'init' | 'informational';
+  durationMs?: number;
   isMeta: boolean;
+  /** Free-text body, present on 'informational' (e.g. a hook blocking prompt submission) */
+  content?: string;
+  /** Severity as classified by the CLI, present on 'informational' */
+  level?: 'info' | 'warning' | 'error';
+  /** True when this entry stopped the turn from continuing (e.g. UserPromptSubmit hook exit 2) */
+  preventContinuation?: boolean;
 }
 
 export interface SummaryEntry extends BaseEntry {
@@ -276,10 +282,31 @@ export interface HookAdditionalContextAttachment {
   mergedAdditionalContext?: string[];
 }
 
+/**
+ * Synthesized from a `type: "system", subtype: "informational"` entry — the CLI's
+ * own record that a hook's exit code 2 (or equivalent) stopped a turn from
+ * continuing, as opposed to the `hook_*` attachment lines which record a hook
+ * that ran without blocking anything.
+ */
+export interface HookBlockedPromptAttachment {
+  type: 'hook_blocked_prompt';
+  content: string;
+  hookName: string;
+  hookEvent: string;
+  level?: 'info' | 'warning' | 'error';
+  preventContinuation: boolean;
+  // Never populated in practice: mergeChainedHookAttachments (main/utils/jsonl.ts)
+  // only chains type: 'attachment' entries, and this variant is synthesized from a
+  // type: 'system' entry. Declared for structural compatibility with HookAttachment.
+  mergedSystemMessage?: string;
+  mergedAdditionalContext?: string[];
+}
+
 export type HookAttachment =
   | HookSuccessAttachment
   | HookCancelledAttachment
   | HookSystemMessageAttachment
+  | HookBlockedPromptAttachment
   | HookAdditionalContextAttachment;
 
 export interface AttachmentEntry extends BaseEntry {

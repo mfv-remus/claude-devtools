@@ -683,6 +683,18 @@ function createHookGroup(chunk: EnhancedHookChunk): HookGroup {
     };
   }
 
+  if (attachment?.type === 'hook_blocked_prompt') {
+    return {
+      id: chunk.id,
+      timestamp: chunk.startTime,
+      hookName,
+      hookEvent,
+      status: 'blocked',
+      exitCode: 2,
+      systemMessage: attachment.content,
+    };
+  }
+
   // hook_system_message / hook_additional_context: hooks that never emit a hook_success
   // or hook_cancelled line (e.g. UserPromptExpansion, bare SessionStart/SubagentStart) -
   // the attachment's content field (plus anything folded in from a chained line by

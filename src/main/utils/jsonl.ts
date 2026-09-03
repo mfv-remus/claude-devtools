@@ -151,6 +151,37 @@ export function parseJsonlLine(line: string): ParsedMessage | null {
 // =============================================================================
 
 /**
+ * A `type: "system", subtype: "informational"` entry's `content` is CLI-generated
+ * free text, not structured JSON - typically `"<HookEvent> operation blocked by
+ * hook:\n[<command>]: <reason>\n..."`. Pull out the event name and the offending
+ * command/script so the resulting marker can label itself the same way the
+ * `hook_*` attachment types do, falling back to generic labels when the text
+ * doesn't match that shape (other CLI versions may phrase this differently).
+ */
+function buildBlockedPromptAttachment(
+  content: string,
+  level: 'info' | 'warning' | 'error' | undefined,
+  preventContinuation: boolean
+): HookAttachment {
+  const eventMatch = /^(\S+) operation blocked by hook:/.exec(content);
+  const hookEvent = eventMatch?.[1] ?? 'UserPromptSubmit';
+
+  const bracketStart = content.indexOf('[');
+  const bracketEnd = bracketStart === -1 ? -1 : content.indexOf(']', bracketStart + 1);
+  const command = bracketEnd === -1 ? undefined : content.slice(bracketStart + 1, bracketEnd);
+  const hookName = command ? (command.split('/').pop() ?? hookEvent) : hookEvent;
+
+  return {
+    type: 'hook_blocked_prompt',
+    content,
+    hookName,
+    hookEvent,
+    level,
+    preventContinuation,
+  };
+}
+
+/**
  * Parse a single JSONL entry into a ParsedMessage.
  */
 function parseChatHistoryEntry(entry: ChatHistoryEntry): ParsedMessage | null {
@@ -228,6 +259,14 @@ function parseChatHistoryEntry(entry: ChatHistoryEntry): ParsedMessage | null {
       requestId = entry.requestId;
     } else if (entry.type === 'system') {
       isMeta = entry.isMeta ?? false;
+      if (entry.subtype === 'informational' && entry.content) {
+        content = entry.content;
+        hookAttachment = buildBlockedPromptAttachment(
+          entry.content,
+          entry.level,
+          entry.preventContinuation ?? false
+        );
+      }
     }
   }
 

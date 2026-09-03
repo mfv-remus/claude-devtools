@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { CODE_BG, CODE_BORDER, COLOR_TEXT_SECONDARY } from '@renderer/constants/cssVariables';
 import { formatDuration } from '@renderer/utils/formatters';
 import { format } from 'date-fns';
-import { AlertCircle, CheckCircle2, CircleSlash, X } from 'lucide-react';
+import { AlertCircle, Ban, CheckCircle2, CircleSlash, X } from 'lucide-react';
 
 import { CopyButton } from '../common/CopyButton';
 
@@ -15,6 +15,9 @@ interface HookDetailModalProps {
 }
 
 const StatusIcon = ({ hookGroup }: { hookGroup: HookGroup }): React.JSX.Element => {
+  if (hookGroup.status === 'blocked') {
+    return <Ban size={14} style={{ color: 'var(--tool-result-error-text)' }} />;
+  }
   if (hookGroup.status === 'cancelled') {
     return <CircleSlash size={14} style={{ color: 'var(--color-text-muted)' }} />;
   }
@@ -91,7 +94,11 @@ export const HookDetailModal = ({
               className="mt-1 flex items-center gap-3 font-mono text-[11px] tabular-nums"
               style={{ color: 'var(--color-text-muted)' }}
             >
-              <span>{status === 'cancelled' ? 'cancelled' : formatDuration(durationMs ?? 0)}</span>
+              <span>
+                {status === 'cancelled' && 'cancelled'}
+                {status === 'blocked' && 'blocked'}
+                {status === 'success' && formatDuration(durationMs ?? 0)}
+              </span>
               {exitCode !== undefined && exitCode !== 0 && (
                 <span style={{ color: 'var(--warning-text)' }}>exit code {exitCode}</span>
               )}

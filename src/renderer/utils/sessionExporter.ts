@@ -192,6 +192,9 @@ function formatChunkPlainText(chunk: Chunk): string[] {
       } else if (attachment?.type === 'hook_additional_context') {
         lines.push(`HOOK: ${attachment.hookName} (injected context)`);
         for (const ctx of attachment.content) lines.push(`  ${ctx}`);
+      } else if (attachment?.type === 'hook_blocked_prompt') {
+        lines.push(`HOOK: ${attachment.hookName} (blocked)`);
+        lines.push(`  ${attachment.content}`);
       }
       break;
     }
@@ -348,6 +351,11 @@ function formatChunkMarkdown(chunk: Chunk, turnNum: number): string[] {
           lines.push('```');
           lines.push('');
         }
+      } else if (attachment?.type === 'hook_blocked_prompt') {
+        lines.push(`### Hook: ${attachment.hookName} (blocked, Turn ${turnNum})`);
+        lines.push('');
+        lines.push(attachment.content);
+        lines.push('');
       }
       break;
     }
