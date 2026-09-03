@@ -398,6 +398,83 @@ describe('ChunkBuilder', () => {
         expect(isUserChunk(chunks[0])).toBe(true);
         expect(isHookChunk(chunks[1])).toBe(true);
       });
+
+      it('should surface a standalone hook_system_message with no hook_success companion (e.g. UserPromptExpansion)', () => {
+        const messages = [
+          createMessage({
+            type: 'user',
+            content: 'Hello',
+            isMeta: false,
+          }),
+          createHookMessage({
+            type: 'hook_system_message',
+            content: 'CUSTOM OVERRIDE FOUND',
+            hookName: 'UserPromptExpansion',
+            hookEvent: 'UserPromptExpansion',
+          }),
+        ];
+
+        const chunks = builder.buildChunks(messages);
+        expect(chunks).toHaveLength(2);
+        expect(isHookChunk(chunks[1])).toBe(true);
+        if (isHookChunk(chunks[1])) {
+          expect(chunks[1].message.hookAttachment?.type).toBe('hook_system_message');
+        }
+      });
+
+      it('should surface a standalone hook_additional_context with no hook_success companion (e.g. bare SessionStart)', () => {
+        const messages = [
+          createHookMessage({
+            type: 'hook_additional_context',
+            content: ['Injected skill instructions'],
+            hookName: 'SessionStart',
+            hookEvent: 'SessionStart',
+          }),
+        ];
+
+        const chunks = builder.buildChunks(messages);
+        expect(chunks).toHaveLength(1);
+        expect(isHookChunk(chunks[0])).toBe(true);
+        if (isHookChunk(chunks[0])) {
+          expect(chunks[0].message.hookAttachment?.type).toBe('hook_additional_context');
+        }
+      });
+
+      it('should merge a mid-turn hook_system_message/hook_additional_context pair into the surrounding AIChunk', () => {
+        const messages = [
+          createMessage({
+            type: 'assistant',
+            content: [{ type: 'text', text: 'Editing the file' }],
+          }),
+          createHookMessage({
+            type: 'hook_system_message',
+            content: 'mermaid blocks detected',
+            hookName: 'PostToolUse:Edit',
+            hookEvent: 'PostToolUse',
+          }),
+          createHookMessage({
+            type: 'hook_additional_context',
+            content: ['stale-file warning text'],
+            hookName: 'PostToolUse:Edit',
+            hookEvent: 'PostToolUse',
+          }),
+          createMessage({
+            type: 'assistant',
+            content: [{ type: 'text', text: 'Validated, done' }],
+          }),
+        ];
+
+        const chunks = builder.buildChunks(messages);
+        expect(chunks).toHaveLength(1);
+        expect(isAIChunk(chunks[0])).toBe(true);
+
+        if (isAIChunk(chunks[0])) {
+          const hookSteps = chunks[0].semanticSteps.filter((s) => s.type === 'hook');
+          expect(hookSteps).toHaveLength(2);
+          expect(hookSteps[0]?.content.hookSystemMessage).toBe('mermaid blocks detected');
+          expect(hookSteps[1]?.content.hookAdditionalContext).toEqual(['stale-file warning text']);
+        }
+      });
     });
 
     describe('subagent linking', () => {

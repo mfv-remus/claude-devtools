@@ -664,20 +664,43 @@ function createHookGroup(chunk: EnhancedHookChunk): HookGroup {
       stderr: attachment.stderr,
       exitCode: attachment.exitCode,
       durationMs: attachment.durationMs,
-      systemMessage,
-      additionalContext,
+      systemMessage: systemMessage ?? attachment.mergedSystemMessage,
+      additionalContext: additionalContext ?? attachment.mergedAdditionalContext,
     };
   }
 
-  const cancelledAttachment = attachment?.type === 'hook_cancelled' ? attachment : undefined;
+  if (attachment?.type === 'hook_cancelled') {
+    return {
+      id: chunk.id,
+      timestamp: chunk.startTime,
+      hookName,
+      hookEvent,
+      status: 'cancelled',
+      command: attachment.command,
+      durationMs: attachment.durationMs,
+      systemMessage: attachment.mergedSystemMessage,
+      additionalContext: attachment.mergedAdditionalContext,
+    };
+  }
+
+  // hook_system_message / hook_additional_context: hooks that never emit a hook_success
+  // or hook_cancelled line (e.g. UserPromptExpansion, bare SessionStart/SubagentStart) -
+  // the attachment's content field (plus anything folded in from a chained line by
+  // mergeChainedHookAttachments) is the only record of the firing.
   return {
     id: chunk.id,
     timestamp: chunk.startTime,
     hookName,
     hookEvent,
-    status: 'cancelled',
-    command: cancelledAttachment?.command,
-    durationMs: cancelledAttachment?.durationMs,
+    status: 'success',
+    systemMessage:
+      attachment?.type === 'hook_system_message'
+        ? attachment.content
+        : attachment?.mergedSystemMessage,
+    additionalContext:
+      attachment?.type === 'hook_additional_context'
+        ? attachment.content
+        : attachment?.mergedAdditionalContext,
   };
 }
 

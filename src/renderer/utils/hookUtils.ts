@@ -54,7 +54,7 @@ export function buildHookGroupFromStep(step: SemanticStep): HookGroup {
     stderr: content.hookStderr,
     exitCode: content.hookExitCode,
     durationMs: step.durationMs,
-    systemMessage,
-    additionalContext,
+    systemMessage: systemMessage ?? content.hookSystemMessage,
+    additionalContext: additionalContext ?? content.hookAdditionalContext,
   };
 }

@@ -285,6 +285,11 @@ export interface SemanticStep {
     hookStdout?: string; // For hook
     hookStderr?: string; // For hook
     hookExitCode?: number; // For hook
+    // Some hooks (e.g. UserPromptExpansion, bare SessionStart/SubagentStart) never emit a
+    // hook_success/hook_cancelled line - only a hook_system_message and/or
+    // hook_additional_context line. These carry the content directly (no stdout to parse).
+    hookSystemMessage?: string; // For hook - from a standalone hook_system_message attachment
+    hookAdditionalContext?: string[]; // For hook - from a standalone hook_additional_context attachment
   };
 
   /** Token attribution */

@@ -41,8 +41,19 @@ export const HookDetailModal = ({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  const { hookName, hookEvent, status, command, stdout, stderr, exitCode, durationMs, timestamp } =
-    hookGroup;
+  const {
+    hookName,
+    hookEvent,
+    status,
+    command,
+    stdout,
+    stderr,
+    exitCode,
+    durationMs,
+    timestamp,
+    systemMessage,
+    additionalContext,
+  } = hookGroup;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -117,12 +128,30 @@ export const HookDetailModal = ({
             </div>
           )}
 
-          {hookGroup.additionalContext && hookGroup.additionalContext.length > 0 && (
+          {systemMessage && (
+            <div>
+              <div className="mb-1 text-xs font-medium" style={{ color: COLOR_TEXT_SECONDARY }}>
+                System message
+              </div>
+              <pre
+                className="whitespace-pre-wrap rounded-lg p-3 font-mono text-xs"
+                style={{
+                  color: COLOR_TEXT_SECONDARY,
+                  backgroundColor: CODE_BG,
+                  border: `1px solid ${CODE_BORDER}`,
+                }}
+              >
+                {systemMessage}
+              </pre>
+            </div>
+          )}
+
+          {additionalContext && additionalContext.length > 0 && (
             <div>
               <div className="mb-1 text-xs font-medium" style={{ color: 'var(--warning-text)' }}>
                 Injected context
               </div>
-              {hookGroup.additionalContext.map((ctx, i) => (
+              {additionalContext.map((ctx, i) => (
                 <pre
                   key={i}
                   className="whitespace-pre-wrap rounded-lg p-3 font-mono text-xs"
@@ -175,7 +204,7 @@ export const HookDetailModal = ({
             </div>
           )}
 
-          {!command && !stdout && !stderr && (
+          {!command && !stdout && !stderr && !systemMessage && !additionalContext?.length && (
             <div className="py-8 text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>
               {status === 'cancelled'
                 ? 'This hook was cancelled before it produced any output.'

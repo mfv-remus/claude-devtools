@@ -213,15 +213,18 @@ export interface QueueOperationEntry extends BaseEntry {
 /**
  * Hook lifecycle events emitted by the Claude Code CLI (not the LLM itself).
  *
- * A single hook invocation typically produces up to 3 attachment lines sharing
- * the same toolUseID:
- * - hook_success: the raw execution result (command, stdout, stderr, exitCode)
- * - hook_system_message: systemMessage extracted from the hook's stdout JSON (derived, redundant)
- * - hook_additional_context: hookSpecificOutput.additionalContext from stdout JSON (derived, redundant)
+ * A single hook firing produces 1-3 attachment lines chained via parentUuid (each line's
+ * parentUuid is the previous line's uuid): a hook_success/hook_cancelled line, optionally
+ * followed by a derived hook_system_message and/or hook_additional_context line. Some
+ * hooks (e.g. UserPromptExpansion, bare SessionStart/SubagentStart without a suffix) only
+ * ever emit the hook_system_message/hook_additional_context lines, with no
+ * hook_success/hook_cancelled line at all.
  *
- * hook_system_message/hook_additional_context carry no information beyond what's
- * already in hook_success.stdout, so only hook_success/hook_cancelled are surfaced
- * as ParsedMessages (see parseChatHistoryEntry).
+ * `mergeChainedHookAttachments` (see main/utils/jsonl.ts) collapses each such parentUuid
+ * chain into a single ParsedMessage before it reaches the rest of the app, so exactly one
+ * UI marker is rendered per hook firing regardless of how many lines it produced. The
+ * `mergedSystemMessage`/`mergedAdditionalContext` fields below carry content absorbed from
+ * a later line in the chain onto the first (kept) line.
  */
 export interface HookSuccessAttachment {
   type: 'hook_success';
@@ -234,6 +237,8 @@ export interface HookSuccessAttachment {
   exitCode: number;
   command: string;
   durationMs: number;
+  mergedSystemMessage?: string;
+  mergedAdditionalContext?: string[];
 }
 
 export interface HookCancelledAttachment {
@@ -247,6 +252,8 @@ export interface HookCancelledAttachment {
   durationMs?: number;
   timedOut?: boolean;
   timeoutMs?: number;
+  mergedSystemMessage?: string;
+  mergedAdditionalContext?: string[];
 }
 
 export interface HookSystemMessageAttachment {
@@ -255,6 +262,8 @@ export interface HookSystemMessageAttachment {
   hookName: string;
   hookEvent: string;
   toolUseID?: string;
+  mergedSystemMessage?: string;
+  mergedAdditionalContext?: string[];
 }
 
 export interface HookAdditionalContextAttachment {
@@ -263,6 +272,8 @@ export interface HookAdditionalContextAttachment {
   hookName: string;
   hookEvent: string;
   toolUseID?: string;
+  mergedSystemMessage?: string;
+  mergedAdditionalContext?: string[];
 }
 
 export type HookAttachment =
