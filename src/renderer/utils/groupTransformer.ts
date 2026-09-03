@@ -17,6 +17,7 @@ import {
   isEnhancedSystemChunk,
   isEnhancedUserChunk,
 } from '@renderer/types/data';
+import { parseHookStdout } from '@renderer/utils/hookUtils';
 import { getFirstSegment, hasPathSeparator, isRelativePath } from '@renderer/utils/pathUtils';
 import { isCommandContent, sanitizeDisplayContent } from '@shared/utils/contentSanitizer';
 import { createLogger } from '@shared/utils/logger';
@@ -638,40 +639,15 @@ function createCompactGroup(chunk: EnhancedCompactChunk): CompactGroup {
 // =============================================================================
 
 /**
- * Parses a hook's stdout as JSON to extract the fields the CLI itself surfaces
- * to the user: `systemMessage` and `hookSpecificOutput.additionalContext`.
- * Hooks that print plain (non-JSON) text have neither field.
- */
-function parseHookStdout(stdout: string): {
-  systemMessage?: string;
-  additionalContext?: string[];
-} {
-  if (!stdout.trim()) return {};
-
-  try {
-    const parsed = JSON.parse(stdout) as {
-      systemMessage?: string;
-      hookSpecificOutput?: { additionalContext?: string | string[] };
-    };
-    const rawContext = parsed.hookSpecificOutput?.additionalContext;
-    const additionalContext =
-      rawContext === undefined ? undefined : Array.isArray(rawContext) ? rawContext : [rawContext];
-
-    return { systemMessage: parsed.systemMessage, additionalContext };
-  } catch {
-    return {};
-  }
-}
-
-/**
- * Creates a HookGroup from an EnhancedHookChunk.
+ * Creates a HookGroup from an EnhancedHookChunk (a hook with no adjacent AI turn
+ * to attach to, e.g. SessionStart before the first message, or UserPromptSubmit/Stop
+ * firing between two turns).
  *
  * @param chunk - The hook chunk to transform
  * @returns HookGroup with the hook's execution details
  */
 function createHookGroup(chunk: EnhancedHookChunk): HookGroup {
-  const { message } = chunk;
-  const attachment = message.hookAttachment;
+  const attachment = chunk.message.hookAttachment;
   const hookName = attachment?.hookName ?? 'unknown';
   const hookEvent = attachment?.hookEvent ?? 'unknown';
 
@@ -679,7 +655,6 @@ function createHookGroup(chunk: EnhancedHookChunk): HookGroup {
     const { systemMessage, additionalContext } = parseHookStdout(attachment.stdout);
     return {
       id: chunk.id,
-      message,
       timestamp: chunk.startTime,
       hookName,
       hookEvent,
@@ -689,18 +664,43 @@ function createHookGroup(chunk: EnhancedHookChunk): HookGroup {
       stderr: attachment.stderr,
       exitCode: attachment.exitCode,
       durationMs: attachment.durationMs,
-      systemMessage,
-      additionalContext,
+      systemMessage: systemMessage ?? attachment.mergedSystemMessage,
+      additionalContext: additionalContext ?? attachment.mergedAdditionalContext,
     };
   }
 
+  if (attachment?.type === 'hook_cancelled') {
+    return {
+      id: chunk.id,
+      timestamp: chunk.startTime,
+      hookName,
+      hookEvent,
+      status: 'cancelled',
+      command: attachment.command,
+      durationMs: attachment.durationMs,
+      systemMessage: attachment.mergedSystemMessage,
+      additionalContext: attachment.mergedAdditionalContext,
+    };
+  }
+
+  // hook_system_message / hook_additional_context: hooks that never emit a hook_success
+  // or hook_cancelled line (e.g. UserPromptExpansion, bare SessionStart/SubagentStart) -
+  // the attachment's content field (plus anything folded in from a chained line by
+  // mergeChainedHookAttachments) is the only record of the firing.
   return {
     id: chunk.id,
-    message,
     timestamp: chunk.startTime,
     hookName,
     hookEvent,
-    status: 'cancelled',
+    status: 'success',
+    systemMessage:
+      attachment?.type === 'hook_system_message'
+        ? attachment.content
+        : attachment?.mergedSystemMessage,
+    additionalContext:
+      attachment?.type === 'hook_additional_context'
+        ? attachment.content
+        : attachment?.mergedAdditionalContext,
   };
 }
 

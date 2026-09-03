@@ -13,6 +13,7 @@ import { format } from 'date-fns';
 import { ChevronRight, Layers, MailOpen } from 'lucide-react';
 
 import { BaseItem } from './items/BaseItem';
+import { HookMarker } from './items/HookMarker';
 import { LinkedToolItem } from './items/LinkedToolItem';
 import { SlashItem } from './items/SlashItem';
 import { SubagentItem } from './items/SubagentItem';
@@ -316,6 +317,12 @@ export const DisplayItemList = React.memo(function DisplayItemList({
                 )}
               </div>
             );
+            break;
+          }
+
+          case 'hook': {
+            itemKey = `hook-${item.hook.id}-${index}`;
+            element = <HookMarker hookGroup={item.hook} />;
             break;
           }
 

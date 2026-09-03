@@ -10,6 +10,7 @@
  * - interruption: User interruption
  */
 
+import { isParsedHookMessage } from '@main/types';
 import { countContentTokens } from '@main/utils/tokenizer';
 
 import type { AIChunk, EnhancedAIChunk, SemanticStep } from '@main/types';
@@ -36,6 +37,73 @@ export function extractSemanticStepsFromAIChunk(chunk: AIChunk | EnhancedAIChunk
 
   // Process only AI responses (no user message in AIChunk)
   for (const msg of chunk.responses) {
+    // Hook fired mid-turn (e.g. PostToolUse between two tool calls). Rendered as an
+    // inline marker rather than splitting the turn into separate AI chunks.
+    if (isParsedHookMessage(msg) && msg.hookAttachment) {
+      const attachment = msg.hookAttachment;
+
+      if (attachment.type === 'hook_success' || attachment.type === 'hook_cancelled') {
+        const isSuccess = attachment.type === 'hook_success';
+        const durationMs = attachment.durationMs ?? 0;
+
+        steps.push({
+          id: msg.uuid,
+          type: 'hook',
+          startTime: new Date(msg.timestamp),
+          endTime: new Date(msg.timestamp.getTime() + durationMs),
+          durationMs,
+          content: {
+            hookName: attachment.hookName,
+            hookEvent: attachment.hookEvent,
+            hookStatus: isSuccess ? 'success' : 'cancelled',
+            hookCommand: attachment.command,
+            hookStdout: isSuccess ? attachment.stdout : undefined,
+            hookStderr: isSuccess ? attachment.stderr : undefined,
+            hookExitCode: isSuccess ? attachment.exitCode : undefined,
+            hookSystemMessage: attachment.mergedSystemMessage,
+            hookAdditionalContext: attachment.mergedAdditionalContext,
+          },
+          context: msg.agentId ? 'subagent' : 'main',
+          agentId: msg.agentId,
+          sourceMessageId: msg.uuid,
+        });
+        continue;
+      }
+
+      // Some hooks (e.g. UserPromptExpansion, bare SessionStart/SubagentStart) never emit
+      // a hook_success/hook_cancelled line at all - their system message or injected
+      // context is the only record of the firing, so it's surfaced directly here.
+      if (
+        attachment.type === 'hook_system_message' ||
+        attachment.type === 'hook_additional_context'
+      ) {
+        steps.push({
+          id: msg.uuid,
+          type: 'hook',
+          startTime: new Date(msg.timestamp),
+          endTime: new Date(msg.timestamp),
+          durationMs: 0,
+          content: {
+            hookName: attachment.hookName,
+            hookEvent: attachment.hookEvent,
+            hookStatus: 'success',
+            hookSystemMessage:
+              attachment.type === 'hook_system_message'
+                ? attachment.content
+                : attachment.mergedSystemMessage,
+            hookAdditionalContext:
+              attachment.type === 'hook_additional_context'
+                ? attachment.content
+                : attachment.mergedAdditionalContext,
+          },
+          context: msg.agentId ? 'subagent' : 'main',
+          agentId: msg.agentId,
+          sourceMessageId: msg.uuid,
+        });
+        continue;
+      }
+    }
+
     if (msg.type === 'assistant') {
       // Extract from content blocks
       const content = Array.isArray(msg.content) ? msg.content : [];

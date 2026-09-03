@@ -11,8 +11,14 @@
 import { describe, expect, it } from 'vitest';
 
 import { ChunkBuilder } from '../../../../src/main/services/analysis/ChunkBuilder';
-import { isAIChunk, isCompactChunk, isSystemChunk, isUserChunk } from '../../../../src/main/types';
-import type { ParsedMessage, Process } from '../../../../src/main/types';
+import {
+  isAIChunk,
+  isCompactChunk,
+  isHookChunk,
+  isSystemChunk,
+  isUserChunk,
+} from '../../../../src/main/types';
+import type { HookAttachment, ParsedMessage, Process } from '../../../../src/main/types';
 
 // =============================================================================
 // Test Helpers
@@ -61,6 +67,17 @@ function createSubagent(overrides: Partial<Process>): Process {
     },
     ...overrides,
   };
+}
+
+/**
+ * Creates a minimal hook attachment ParsedMessage for testing.
+ */
+function createHookMessage(attachment: HookAttachment): ParsedMessage {
+  return createMessage({
+    type: 'attachment',
+    content: '',
+    hookAttachment: attachment,
+  });
 }
 
 // =============================================================================
@@ -320,6 +337,143 @@ describe('ChunkBuilder', () => {
         expect(chunks).toHaveLength(2);
         expect(isAIChunk(chunks[0])).toBe(true);
         expect(isSystemChunk(chunks[1])).toBe(true);
+      });
+    });
+
+    describe('HookChunk handling', () => {
+      it('should merge a hook firing mid-turn into the surrounding AIChunk instead of splitting it', () => {
+        const messages = [
+          createMessage({
+            type: 'assistant',
+            content: [{ type: 'text', text: 'Editing the file' }],
+          }),
+          createHookMessage({
+            type: 'hook_success',
+            hookName: 'PostToolUse:Edit',
+            hookEvent: 'PostToolUse',
+            content: '',
+            stdout: '',
+            stderr: '',
+            exitCode: 0,
+            command: 'validate.sh',
+            durationMs: 50,
+          }),
+          createMessage({
+            type: 'assistant',
+            content: [{ type: 'text', text: 'Validated, done' }],
+          }),
+        ];
+
+        const chunks = builder.buildChunks(messages);
+
+        // The hook must NOT split this into two AIChunks/groups.
+        expect(chunks).toHaveLength(1);
+        expect(isAIChunk(chunks[0])).toBe(true);
+
+        if (isAIChunk(chunks[0])) {
+          const hookStep = chunks[0].semanticSteps.find((s) => s.type === 'hook');
+          expect(hookStep).toBeDefined();
+          expect(hookStep?.content.hookName).toBe('PostToolUse:Edit');
+        }
+      });
+
+      it('should create a standalone HookChunk when no AI turn is active', () => {
+        const messages = [
+          createMessage({
+            type: 'user',
+            content: 'Hello',
+            isMeta: false,
+          }),
+          createHookMessage({
+            type: 'hook_cancelled',
+            hookName: 'UserPromptSubmit',
+            hookEvent: 'UserPromptSubmit',
+            command: 'scan-prompt.sh',
+            durationMs: 128,
+          }),
+        ];
+
+        const chunks = builder.buildChunks(messages);
+        expect(chunks).toHaveLength(2);
+        expect(isUserChunk(chunks[0])).toBe(true);
+        expect(isHookChunk(chunks[1])).toBe(true);
+      });
+
+      it('should surface a standalone hook_system_message with no hook_success companion (e.g. UserPromptExpansion)', () => {
+        const messages = [
+          createMessage({
+            type: 'user',
+            content: 'Hello',
+            isMeta: false,
+          }),
+          createHookMessage({
+            type: 'hook_system_message',
+            content: 'CUSTOM OVERRIDE FOUND',
+            hookName: 'UserPromptExpansion',
+            hookEvent: 'UserPromptExpansion',
+          }),
+        ];
+
+        const chunks = builder.buildChunks(messages);
+        expect(chunks).toHaveLength(2);
+        expect(isHookChunk(chunks[1])).toBe(true);
+        if (isHookChunk(chunks[1])) {
+          expect(chunks[1].message.hookAttachment?.type).toBe('hook_system_message');
+        }
+      });
+
+      it('should surface a standalone hook_additional_context with no hook_success companion (e.g. bare SessionStart)', () => {
+        const messages = [
+          createHookMessage({
+            type: 'hook_additional_context',
+            content: ['Injected skill instructions'],
+            hookName: 'SessionStart',
+            hookEvent: 'SessionStart',
+          }),
+        ];
+
+        const chunks = builder.buildChunks(messages);
+        expect(chunks).toHaveLength(1);
+        expect(isHookChunk(chunks[0])).toBe(true);
+        if (isHookChunk(chunks[0])) {
+          expect(chunks[0].message.hookAttachment?.type).toBe('hook_additional_context');
+        }
+      });
+
+      it('should merge a mid-turn hook_system_message/hook_additional_context pair into the surrounding AIChunk', () => {
+        const messages = [
+          createMessage({
+            type: 'assistant',
+            content: [{ type: 'text', text: 'Editing the file' }],
+          }),
+          createHookMessage({
+            type: 'hook_system_message',
+            content: 'mermaid blocks detected',
+            hookName: 'PostToolUse:Edit',
+            hookEvent: 'PostToolUse',
+          }),
+          createHookMessage({
+            type: 'hook_additional_context',
+            content: ['stale-file warning text'],
+            hookName: 'PostToolUse:Edit',
+            hookEvent: 'PostToolUse',
+          }),
+          createMessage({
+            type: 'assistant',
+            content: [{ type: 'text', text: 'Validated, done' }],
+          }),
+        ];
+
+        const chunks = builder.buildChunks(messages);
+        expect(chunks).toHaveLength(1);
+        expect(isAIChunk(chunks[0])).toBe(true);
+
+        if (isAIChunk(chunks[0])) {
+          const hookSteps = chunks[0].semanticSteps.filter((s) => s.type === 'hook');
+          expect(hookSteps).toHaveLength(2);
+          expect(hookSteps[0]?.content.hookSystemMessage).toBe('mermaid blocks detected');
+          expect(hookSteps[1]?.content.hookAdditionalContext).toEqual(['stale-file warning text']);
+        }
       });
     });
 

@@ -28,6 +28,7 @@ export function buildSummary(items: AIGroupDisplayItem[]): string {
     teammate_message: 0,
     subagent_input: 0,
     compact_boundary: 0,
+    hook: 0,
   };
   const teammateNames = new Set<string>();
 
@@ -68,6 +69,9 @@ export function buildSummary(items: AIGroupDisplayItem[]): string {
     parts.push(
       `${counts.compact_boundary} ${counts.compact_boundary === 1 ? 'compaction' : 'compactions'}`
     );
+  }
+  if (counts.hook > 0) {
+    parts.push(`${counts.hook} ${counts.hook === 1 ? 'hook' : 'hooks'}`);
   }
 
   return parts.length > 0 ? parts.join(', ') : 'No items';
