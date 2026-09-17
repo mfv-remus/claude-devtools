@@ -3,6 +3,11 @@ services:
     build: .
     volumes:
       - ${CLAUDE_DIR:-~/.claude}:/data/.claude:ro
+      # Mirror the same host path unmapped so absolute symlinks that Claude Code
+      # writes inside ~/.claude (e.g. across continued/split sessions) still resolve.
+      # (Compose only tilde-expands the source side of a bind mount, so the target
+      # side here uses $HOME instead of ~.)
+      - ${CLAUDE_DIR:-~/.claude}:${CLAUDE_DIR:-$HOME/.claude}:ro
     environment:
       - NODE_ENV=production
       - CLAUDE_ROOT=/data/.claude
