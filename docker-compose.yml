@@ -22,7 +22,7 @@ services:
     image: alpine/socat
     command: tcp-listen:3456,fork,reuseaddr tcp-connect:claude-devtools:3456
     ports:
-      - "3456:3456"
+      - "127.0.0.1:3456:3456"
     networks:
       - external_net
       - secure_net
