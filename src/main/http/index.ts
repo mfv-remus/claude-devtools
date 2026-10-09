@@ -9,6 +9,7 @@ import { createLogger } from '@shared/utils/logger';
 
 import { registerConfigRoutes } from './config';
 import { registerEventRoutes } from './events';
+import { registerImportRoutes } from './imports';
 import { registerMemoryRoutes } from './memory';
 import { registerNotificationRoutes } from './notifications';
 import { registerProjectRoutes } from './projects';
@@ -29,6 +30,8 @@ import type {
   SubagentResolver,
   UpdaterService,
 } from '../services';
+import type { ImportService } from '../services/imports/ImportService';
+import type { ImportSessionSource } from '../services/imports/ImportSessionSource';
 import type { SshConnectionManager } from '../services/infrastructure/SshConnectionManager';
 import type { FastifyInstance } from 'fastify';
 
@@ -43,6 +46,10 @@ export interface HttpServices {
   memoryReader: MemoryReader;
   updaterService: UpdaterService;
   sshConnectionManager: SshConnectionManager;
+  /** Set when IMPORTS_ROOT is configured; imports routes are inert otherwise. */
+  importService?: ImportService;
+  importSource?: ImportSessionSource;
+  importsReadonly?: boolean;
 }
 
 export function registerHttpRoutes(
@@ -62,6 +69,11 @@ export function registerHttpRoutes(
   registerUpdaterRoutes(app, services);
   registerMemoryRoutes(app, services);
   registerEventRoutes(app);
+  registerImportRoutes(app, {
+    service: services.importService,
+    source: services.importSource,
+    readonly: services.importsReadonly ?? false,
+  });
 
   logger.info('All HTTP routes registered');
 }

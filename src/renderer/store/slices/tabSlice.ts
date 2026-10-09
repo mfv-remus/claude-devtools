@@ -13,6 +13,7 @@ import {
   truncateLabel,
 } from '@renderer/types/tabs';
 import { generateUUID } from '@renderer/utils/stringUtils';
+import { isImportProjectId } from '@shared/utils/importProjectId';
 
 import {
   findPane,
@@ -137,7 +138,11 @@ export const createTabSlice: StateCreator<AppState, [], [], TabSlice> = (set, ge
     if (tab.type === 'session' && tab.sessionId && !options?.forceNewTab) {
       // Check across ALL panes for dedup
       const allTabs = getAllTabs(paneLayout);
-      const existing = findTabBySession(allTabs, tab.sessionId);
+      // Import trace ids (t001...) repeat across imports, so imports match on project too.
+      const existing =
+        tab.projectId && isImportProjectId(tab.projectId)
+          ? findTabBySessionAndProject(allTabs, tab.sessionId, tab.projectId)
+          : findTabBySession(allTabs, tab.sessionId);
       if (existing) {
         // Focus existing tab (which will also focus its pane)
         state.setActiveTab(existing.id);
@@ -271,6 +276,30 @@ export const createTabSlice: StateCreator<AppState, [], [], TabSlice> = (set, ge
       // Check if per-tab data is already cached
       const cachedTabData = state.tabSessionData[tabId];
       const hasCachedData = cachedTabData?.conversation != null;
+
+      // Imports are virtual projects: no repository/worktree/sidebar project to select.
+      if (isImportProjectId(projectId)) {
+        set({ selectedSessionId: sessionId });
+        if (sessionChanged) {
+          if (hasCachedData) {
+            set({
+              sessionDetail: cachedTabData.sessionDetail,
+              conversation: cachedTabData.conversation,
+              conversationLoading: false,
+              sessionDetailLoading: false,
+              sessionDetailError: null,
+              sessionClaudeMdStats: cachedTabData.sessionClaudeMdStats,
+              sessionContextStats: cachedTabData.sessionContextStats,
+              sessionPhaseInfo: cachedTabData.sessionPhaseInfo,
+              visibleAIGroupId: cachedTabData.visibleAIGroupId,
+              selectedAIGroup: cachedTabData.selectedAIGroup,
+            });
+          } else {
+            void get().fetchSessionDetail(projectId, sessionId, tabId);
+          }
+        }
+        return;
+      }
 
       // Find the repository and worktree containing this session
       let foundRepo: string | null = null;
@@ -686,9 +715,10 @@ export const createTabSlice: StateCreator<AppState, [], [], TabSlice> = (set, ge
 
     // Check if session tab is already open in any pane
     const allTabs = getAllTabs(state.paneLayout);
-    const existingTab =
-      findTabBySessionAndProject(allTabs, sessionId, projectId) ??
-      findTabBySession(allTabs, sessionId);
+    const existingTab = isImportProjectId(projectId)
+      ? findTabBySessionAndProject(allTabs, sessionId, projectId)
+      : (findTabBySessionAndProject(allTabs, sessionId, projectId) ??
+        findTabBySession(allTabs, sessionId));
 
     if (existingTab) {
       // Focus existing tab via setActiveTab for proper sidebar sync

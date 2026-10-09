@@ -13,11 +13,12 @@ Cross-process code used by main and renderer.
 - Process-specific logic
 
 ## Structure
-- `types/` - Shared type definitions (`api.ts`, `notifications.ts`, `visualization.ts`)
+- `types/` - Shared type definitions (`api.ts`, `notifications.ts`, `visualization.ts`, `imports.ts`)
 - `utils/` - Pure utility functions
   - `tokenFormatting.ts` - Token formatting and estimation (`estimateTokens`, `formatTokensCompact`)
   - `modelParser.ts` - Model name/family parsing
   - `teammateMessageParser.ts` - `<teammate-message>` XML parsing
+  - `importProjectId.ts` - `import:<uuid>` project id helpers
   - `markdownTextSearch.ts` - Markdown-aware text search
   - `contentSanitizer.ts` - Content sanitization
   - `errorHandling.ts` - Error helpers

@@ -5,6 +5,7 @@ UI components organized by feature domain.
 ## Structure
 ```
 components/
+├── imports/                 # Import dialog, sidebar section, eval-run matrix, grader header
 ├── chat/                    # Session message display
 │   ├── items/               # Individual message/tool items
 │   │   ├── linkedTool/      # Tool call/result display helpers

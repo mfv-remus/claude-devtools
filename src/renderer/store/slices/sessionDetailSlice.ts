@@ -12,6 +12,7 @@ import {
   incrementalUpdateConversation,
   transformChunksToConversation,
 } from '@renderer/utils/groupTransformer';
+import { isImportProjectId } from '@shared/utils/importProjectId';
 import { createLogger } from '@shared/utils/logger';
 import { isSessionDetailUnchanged } from '@shared/utils/sessionDetailResponse';
 
@@ -253,11 +254,18 @@ export const createSessionDetailSlice: StateCreator<AppState, [], [], SessionDet
       // =====================================================================
 
       const projectRoot = detail?.session?.projectPath ?? '';
+      // Imported sessions have a foreign cwd: never ask the server to read files from it.
+      const isImport = isImportProjectId(projectId);
       const { connectionMode } = get();
 
       // Fetch agent configs from .claude/agents/ (only when project changes).
       // Fire-and-forget: don't block transcript rendering — color badges update async.
-      if (connectionMode !== 'ssh' && projectRoot && projectRoot !== agentConfigsCachedForProject) {
+      if (
+        connectionMode !== 'ssh' &&
+        !isImport &&
+        projectRoot &&
+        projectRoot !== agentConfigsCachedForProject
+      ) {
         agentConfigsCachedForProject = projectRoot; // Optimistic set to prevent duplicate fetches
         api
           .readAgentConfigs(projectRoot)
@@ -288,7 +296,9 @@ export const createSessionDetailSlice: StateCreator<AppState, [], [], SessionDet
         });
         return;
       }
-      const existingTab = findTabBySession(currentState.openTabs, sessionId);
+      const existingTab = isImportProjectId(projectId)
+        ? undefined // import tabs keep the label chosen when they were opened (case / run)
+        : findTabBySession(currentState.openTabs, sessionId);
       if (existingTab && detail) {
         const newLabel = detail.session.firstMessage
           ? truncateLabel(detail.session.firstMessage)
@@ -352,11 +362,13 @@ export const createSessionDetailSlice: StateCreator<AppState, [], [], SessionDet
           try {
             // Fetch real CLAUDE.md token data
             let claudeMdTokenData: Record<string, ClaudeMdFileInfo> = {};
-            try {
-              claudeMdTokenData = await api.readClaudeMdFiles(projectRoot);
-              if (requestGeneration !== sessionDetailFetchGeneration) return;
-            } catch (err) {
-              logger.error('Failed to read CLAUDE.md files:', err);
+            if (!isImport) {
+              try {
+                claudeMdTokenData = await api.readClaudeMdFiles(projectRoot);
+                if (requestGeneration !== sessionDetailFetchGeneration) return;
+              } catch (err) {
+                logger.error('Failed to read CLAUDE.md files:', err);
+              }
             }
 
             const claudeMdStats = processSessionClaudeMd(
@@ -368,7 +380,7 @@ export const createSessionDetailSlice: StateCreator<AppState, [], [], SessionDet
             // Fetch real tokens for directory CLAUDE.md files
             const directoryTokenData: Record<string, ClaudeMdFileInfo> = {};
 
-            if (claudeMdStats && claudeMdStats.size > 0) {
+            if (!isImport && claudeMdStats && claudeMdStats.size > 0) {
               const directoryPaths = new Set<string>();
               for (const stats of claudeMdStats.values()) {
                 for (const injection of stats.accumulatedInjections) {
@@ -476,7 +488,7 @@ export const createSessionDetailSlice: StateCreator<AppState, [], [], SessionDet
             // Fetch token data for each mentioned file (throttled IPC calls)
             const mentionedFileTokenData = new Map<string, MentionedFileInfo>();
             const mentionedFileResults = await batchAsync(
-              Array.from(mentionedFilePaths),
+              isImport ? [] : Array.from(mentionedFilePaths),
               async (filePath) => {
                 try {
                   const fileInfo = await api.readMentionedFile(filePath, projectRoot);

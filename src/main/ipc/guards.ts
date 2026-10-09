@@ -7,6 +7,7 @@
  */
 
 import { isValidProjectId } from '@main/utils/pathDecoder';
+import { isImportProjectId } from '@shared/utils/importProjectId';
 
 const SESSION_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
 const SUBAGENT_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
@@ -50,7 +51,8 @@ export function validateProjectId(projectId: unknown): ValidationResult<string> 
     return basic;
   }
 
-  if (!isValidProjectId(basic.value!)) {
+  // Imports are a separate, strictly anchored form (`import:<uuid>`), not a loosened path rule.
+  if (!isImportProjectId(basic.value) && !isValidProjectId(basic.value!)) {
     return { valid: false, error: 'projectId is not a valid encoded Claude project path' };
   }
 

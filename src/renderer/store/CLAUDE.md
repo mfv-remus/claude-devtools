@@ -8,7 +8,7 @@ State management with slices pattern for domain organization.
 - `slices/` - Individual domain slices
 - `utils/` - Store utilities (`paneHelpers.ts`, `pathResolution.ts`)
 
-## Slices (12 total)
+## Slices (13 total)
 | Slice | Purpose |
 |-------|---------|
 | `projectSlice` | Projects list, selectedProjectId |
@@ -23,6 +23,7 @@ State management with slices pattern for domain organization.
 | `uiSlice` | UI flags (sidebar visible, etc.) |
 | `notificationSlice` | Notifications, unreadCount |
 | `configSlice` | App config, triggers |
+| `importSlice` | Imports list, capabilities, eval results cache (HTTP mode only) |
 
 ## Slice Pattern
 Each slice follows:

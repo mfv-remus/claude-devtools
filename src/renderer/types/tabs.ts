@@ -78,13 +78,16 @@ export interface Tab {
   id: string;
 
   /** Type of content displayed in this tab */
-  type: 'session' | 'dashboard' | 'notifications' | 'settings' | 'memory';
+  type: 'session' | 'dashboard' | 'notifications' | 'settings' | 'memory' | 'eval-run';
 
   /** Session ID (required when type === 'session') */
   sessionId?: string;
 
   /** Project ID (required when type === 'session', or when type === 'memory') */
   projectId?: string;
+
+  /** Import ID (required when type === 'eval-run'): the overview of an imported eval run */
+  importId?: string;
 
   /** Display name for the tab (max 50 chars) */
   label: string;

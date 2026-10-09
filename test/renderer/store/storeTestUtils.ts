@@ -6,6 +6,7 @@ import { create } from 'zustand';
 
 import { createConfigSlice } from '../../../src/renderer/store/slices/configSlice';
 import { createConversationSlice } from '../../../src/renderer/store/slices/conversationSlice';
+import { createImportSlice } from '../../../src/renderer/store/slices/importSlice';
 import { createMemorySlice } from '../../../src/renderer/store/slices/memorySlice';
 import { createNotificationSlice } from '../../../src/renderer/store/slices/notificationSlice';
 import { createPaneSlice } from '../../../src/renderer/store/slices/paneSlice';
@@ -39,6 +40,7 @@ export function createTestStore() {
     ...createNotificationSlice(...args),
     ...createConfigSlice(...args),
     ...createMemorySlice(...args),
+    ...createImportSlice(...args),
   }));
 }
 

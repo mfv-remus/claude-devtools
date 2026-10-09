@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '@renderer/store';
 import { useShallow } from 'zustand/react/shallow';
 
+import { ImportsSection } from '../imports/ImportsSection';
 import { DateGroupedSessions } from '../sidebar/DateGroupedSessions';
 import { MemorySection } from '../sidebar/memory/MemorySection';
 
@@ -104,6 +105,9 @@ export const Sidebar = (): React.JSX.Element | null => {
 
       {/* Memory section (only shown when the project has a memory dir) */}
       <MemorySection />
+
+      {/* Imported eval runs and sessions (only when the server has IMPORTS_ROOT) */}
+      <ImportsSection />
 
       {/* Date-grouped session list */}
       <div className="flex-1 overflow-hidden">

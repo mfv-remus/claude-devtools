@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 
+import { parseImportProjectId } from '@shared/utils/importProjectId';
+
 import { SubagentDetailModal } from './components/chat/SubagentDetailModal';
 import { ConfirmDialog } from './components/common/ConfirmDialog';
 import { ContextSwitchOverlay } from './components/common/ContextSwitchOverlay';
@@ -37,6 +39,18 @@ export const App = (): React.JSX.Element => {
       return;
     }
 
+    // Import overview link ("/import:<uuid>"): imports are virtual projects, so there is
+    // no project to select; the overview opens directly (or explains it no longer exists).
+    const importId = parseImportProjectId(pending.projectId);
+    if (importId) {
+      pendingDeepLinkRef.current = null;
+      void (async (): Promise<void> => {
+        await useStore.getState().loadImportCapabilities();
+        await useStore.getState().openImport(importId);
+      })();
+      return;
+    }
+
     const state = useStore.getState();
     const resolve = (): void => {
       useStore.getState().selectProjectContext(pending.projectId);
@@ -56,6 +70,9 @@ export const App = (): React.JSX.Element => {
     const tab = pane?.tabs.find((t) => t.id === pane.activeTabId);
     if (tab?.type === 'session' && tab.projectId && tab.sessionId) {
       return buildSessionPath(tab.projectId, tab.sessionId);
+    }
+    if (tab?.type === 'eval-run' && tab.importId) {
+      return buildProjectPath(`import:${tab.importId}`);
     }
     if (state.activeProjectId) {
       return buildProjectPath(state.activeProjectId);

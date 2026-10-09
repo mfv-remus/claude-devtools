@@ -40,6 +40,7 @@ import {
   getTodosBasePath,
   isValidEncodedPath,
 } from '@main/utils/pathDecoder';
+import { parseImportProjectId } from '@shared/utils/importProjectId';
 import { createLogger } from '@shared/utils/logger';
 import * as path from 'path';
 
@@ -52,6 +53,7 @@ import { SubagentLocator } from './SubagentLocator';
 import { subprojectRegistry } from './SubprojectRegistry';
 import { WorktreeGrouper } from './WorktreeGrouper';
 
+import type { ImportSessionSource } from '../imports/ImportSessionSource';
 import type { FileSystemProvider, FsDirent } from '../infrastructure/FileSystemProvider';
 
 const logger = createLogger('Discovery:ProjectScanner');
@@ -900,10 +902,20 @@ export class ProjectScanner {
     }
   }
 
+  private importSource: ImportSessionSource | null = null;
+
+  /** Enables `import:*` sessions (standalone server with IMPORTS_ROOT set). */
+  setImportSource(source: ImportSessionSource | null): void {
+    this.importSource = source;
+  }
+
   /**
    * Gets a single session's metadata.
    */
   async getSession(projectId: string, sessionId: string): Promise<Session | null> {
+    const importId = parseImportProjectId(projectId);
+    if (importId) return this.importSource?.buildSession(importId, sessionId) ?? null;
+
     const filePath = this.getSessionPath(projectId, sessionId);
 
     if (!(await this.fsProvider.exists(filePath))) {
@@ -923,6 +935,9 @@ export class ProjectScanner {
     sessionId: string,
     options?: SessionsByIdsOptions
   ): Promise<Session | null> {
+    const importId = parseImportProjectId(projectId);
+    if (importId) return this.importSource?.buildSession(importId, sessionId) ?? null;
+
     const filePath = this.getSessionPath(projectId, sessionId);
 
     if (!(await this.fsProvider.exists(filePath))) {

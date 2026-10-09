@@ -23,7 +23,7 @@ import type { ElectronAPI } from '@shared/types/api';
  * - Standalone/Docker (page served by the same server): use window.location.origin
  *   to avoid cross-origin issues (localhost vs 127.0.0.1)
  */
-function getHttpBaseUrl(): string {
+export function getHttpBaseUrl(): string {
   const params = new URLSearchParams(window.location.search);
   const explicitPort = params.get('port');
   if (explicitPort) {

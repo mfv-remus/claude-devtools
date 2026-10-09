@@ -192,6 +192,33 @@ docker run -p 3456:3456 -v ~/.claude:/data/.claude:ro claude-devtools
 | `CLAUDE_ROOT` | `~/.claude` | Path to the `.claude` data directory |
 | `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `3456` | Listen port |
+| `IMPORTS_ROOT` | unset (`/data/imports` in the Docker image) | Writable directory for imported eval runs and sessions. When unset, the Imports feature is hidden |
+| `IMPORTS_READONLY` | `false` | Set to `true` to disable upload, rename and delete of imports |
+
+### Imports
+
+Import an eval run or a single session into the viewer from the sidebar (Docker/standalone only; not available in the Electron app). Imports are read-only snapshots, kept outside `~/.claude`, and open at `/import:<id>` (overview) and `/import:<id>/<traceId>`.
+
+**Eval run** (`.zip`):
+
+```
+results.json
+traces/<case>/with-1.jsonl
+traces/<case>/without-1.jsonl      # optional: a case may have only one arm
+```
+
+`arms.<arm>[i]` in `results.json` is matched to `traces/<case>/<arm>-<i+1>.jsonl` by position. `partial: true` bundles are accepted and labelled. The overview shows the score matrix; each trace opens as a normal session with a grader header.
+
+**Session** (`.zip`):
+
+```
+<sessionId>.jsonl
+<sessionId>/subagents/agent-*.jsonl   # optional
+```
+
+`<sessionId>` must be a UUID. The upload is validated as a whole and every problem is listed at once; nothing is stored on failure.
+
+Imports are stored under `IMPORTS_ROOT`. With `docker compose`, mount a host directory there so they survive restarts (`mkdir -p ~/.claude-devtools/imports` first; set `UID`/`GID` in a `.env` file so files are not root-owned). Imports are uploaded as a single `.zip` (max 200 MB, 1 GB unzipped; unsafe paths, symlinks and oversized entries are rejected). Do not expose the port beyond loopback without an authenticating reverse proxy, because the import routes can write files.
 
 The standalone server has **zero** outbound network calls. For maximum isolation: `docker run --network none -p 3456:3456 -v ~/.claude:/data/.claude:ro claude-devtools`. See [SECURITY.md](SECURITY.md).
 

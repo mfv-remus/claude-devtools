@@ -21,6 +21,10 @@ Handlers in `ipc/` by domain:
 - `config.ts` - Configuration
 - `notifications.ts` - Notifications
 
+## HTTP (standalone/Docker only)
+- `http/imports.ts` - `/api/imports/*` routes (list, upload, rename, delete, results, trace meta). Write routes need the `x-claude-devtools` header and a same-origin check; `IMPORTS_READONLY` returns 403
+- Imports live under `IMPORTS_ROOT`, outside `projectsDir`; project ids are `import:<uuid>`
+
 ## Adding IPC Handler
 1. Add to domain file in `ipc/`
 2. If new domain, create file and register in `handlers.ts`
