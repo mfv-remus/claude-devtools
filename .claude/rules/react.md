@@ -36,6 +36,7 @@ components/
 ├── common/         # Shared components (badges, token display)
 ├── dashboard/      # Dashboard views
 ├── layout/         # Layout components (headers, shells)
+├── imports/        # Imports dialog, sidebar section, eval-run views (HTTP mode)
 ├── notifications/  # Notification panels and badges
 ├── search/         # Search UI and results
 ├── settings/       # Settings pages and controls

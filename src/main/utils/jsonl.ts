@@ -488,6 +488,14 @@ export async function analyzeSessionFileMetadata(
     crlfDelay: Infinity,
   });
 
+  return analyzeSessionLines(rl);
+}
+
+/**
+ * Same analysis as analyzeSessionFileMetadata over any source of JSONL lines
+ * (used for imported traces that are adapted in memory instead of read from disk).
+ */
+export async function analyzeSessionLines(rl: AsyncIterable<string>): Promise<SessionFileMetadata> {
   let firstUserMessage: { text: string; timestamp: string } | null = null;
   let firstCommandMessage: { text: string; timestamp: string } | null = null;
   let messageCount = 0;

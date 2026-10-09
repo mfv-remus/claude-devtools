@@ -21,7 +21,7 @@ const nodeBuiltins = new Set([
 // Packages that must be externalized because they break when bundled
 // (fastify ecosystem uses internal file resolution that doesn't survive bundling)
 const externalPackages = [
-  'fastify', '@fastify/cors', '@fastify/static'
+  'fastify', '@fastify/cors', '@fastify/multipart', '@fastify/static'
 ]
 
 // Stub native .node addons (ssh2/cpu-features have JS fallbacks)

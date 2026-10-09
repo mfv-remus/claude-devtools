@@ -21,6 +21,7 @@ components/
 ├── common/         # Shared components (badges, dropdowns, token display)
 ├── dashboard/      # Dashboard views
 ├── layout/         # Layout components (headers, shells)
+├── imports/        # Imports UI (HTTP mode)
 ├── notifications/  # Notification panels and badges
 ├── search/         # Search UI and results
 ├── settings/       # Settings UI
@@ -40,6 +41,7 @@ components/
 ## Utils (`utils/`)
 - `contextTracker.ts` - Visible context tracking (computeContextStats, processSessionContextWithPhases)
 - `claudeMdTracker.ts` - CLAUDE.md injection detection
+- `evalResults.ts` - Eval-run formatting, run status, trace matching
 - `aiGroupEnhancer.ts` - AI group enrichment (linkToolCallsToResults, buildDisplayItems)
 - `aiGroupHelpers.ts` - AI group utility functions
 - `displayItemBuilder.ts` - Display item construction

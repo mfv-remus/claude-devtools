@@ -74,3 +74,9 @@ test/
 
 ## Test Data
 Test fixtures use real JSONL session data from `~/.claude/projects/`.
+
+Exception: tests for imports (`test/main/services/imports/`, `test/main/http/imports.test.ts`) use
+invented content only. Never commit a real trace, prompt or `results.json`. Hostile archives
+(zip-slip, symlinks, bombs) are built in memory with `test/main/services/imports/zipFixture.ts`
+(`buildZip`), not checked in as binary files. Component tests without testing-library use
+`createElement` + `react-dom` (see `test/renderer/components/`); vitest only picks up `*.test.ts`.

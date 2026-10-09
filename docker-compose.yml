@@ -8,11 +8,21 @@ services:
       # (Compose only tilde-expands the source side of a bind mount, so the target
       # side here uses $HOME instead of ~.)
       - ${CLAUDE_DIR:-~/.claude}:${CLAUDE_DIR:-$HOME/.claude}:ro
+      # Imported eval runs / sessions. Writable, persists across restarts.
+      # Create the host dir first (mkdir -p ~/.claude-devtools/imports), otherwise
+      # Docker creates it owned by root.
+      - ${IMPORTS_DIR:-~/.claude-devtools/imports}:/data/imports
     environment:
       - NODE_ENV=production
       - CLAUDE_ROOT=/data/.claude
+      - IMPORTS_ROOT=/data/imports
+      # - IMPORTS_READONLY=true   # uncomment to disable upload/rename/delete
       - HOST=0.0.0.0
       - PORT=3456
+    # Run as the host user so files in the imports dir are not root-owned.
+    # UID/GID are shell variables, not env vars: put UID=... and GID=... in a .env
+    # file next to this one (or `export UID GID`), otherwise this falls back to 1000.
+    user: "${UID:-1000}:${GID:-1000}"
     restart: unless-stopped
     networks:
       - secure_net

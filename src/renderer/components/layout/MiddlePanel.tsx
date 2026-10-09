@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { ChatHistory } from '../chat/ChatHistory';
+import { EvalRunHeader } from '../imports/EvalRunHeader';
 import { SearchBar } from '../search/SearchBar';
 
 interface MiddlePanelProps {
@@ -11,6 +12,7 @@ interface MiddlePanelProps {
 export const MiddlePanel: React.FC<MiddlePanelProps> = ({ tabId }) => {
   return (
     <div className="relative flex h-full flex-col">
+      <EvalRunHeader tabId={tabId} />
       <SearchBar tabId={tabId} />
       <ChatHistory tabId={tabId} />
     </div>

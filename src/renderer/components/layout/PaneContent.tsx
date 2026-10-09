@@ -6,6 +6,7 @@
 import { TabUIProvider } from '@renderer/contexts/TabUIContext';
 
 import { DashboardView } from '../dashboard/DashboardView';
+import { EvalRunView } from '../imports/EvalRunView';
 import { MemoryView } from '../memory/MemoryView';
 import { NotificationsView } from '../notifications/NotificationsView';
 import { SettingsView } from '../settings/SettingsView';
@@ -44,6 +45,7 @@ export const PaneContent = ({ pane }: PaneContentProps): React.JSX.Element => {
             {tab.type === 'notifications' && <NotificationsView />}
             {tab.type === 'settings' && <SettingsView />}
             {tab.type === 'memory' && tab.projectId && <MemoryView projectId={tab.projectId} />}
+            {tab.type === 'eval-run' && tab.importId && <EvalRunView importId={tab.importId} />}
             {tab.type === 'session' && (
               <TabUIProvider tabId={tab.id}>
                 <SessionTabContent tab={tab} isActive={isActive} />

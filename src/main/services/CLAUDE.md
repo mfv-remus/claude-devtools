@@ -8,6 +8,7 @@ Business logic organized by domain.
 - `error/` - Error detection, trigger checking
 - `infrastructure/` - Cache, file watching, config, notifications
 - `parsing/` - JSONL parsing, message classification
+- `imports/` - Imported eval runs and sessions (standalone/Docker only)
 
 ## Key Services
 
@@ -38,6 +39,13 @@ Business logic organized by domain.
 - **MessageClassifier** - Categorizes messages (user, system, AI, noise)
 - **ClaudeMdReader** - Reads CLAUDE.md configuration
 - **GitIdentityResolver** - Resolves git identities
+
+### Imports
+- **ImportService** - Storage, manifests and path resolution under `IMPORTS_ROOT`
+- **importFromZip** - Single entry point for uploads: validate, extract whitelisted entries to staging, atomic commit
+- **EvalTraceAdapter** - Converts SDK stream-json eval traces to session lines at read time
+- **ImportSessionSource** - Feeds `ProjectScanner`/`SessionParser` for `import:*` projects
+- **evalResultsView** - Defensive read model of `results.json` for the UI
 
 ### Error
 - **ErrorDetector** - Per-tool-use token counting, returns `DetectedError[]`

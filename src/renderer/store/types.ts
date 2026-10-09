@@ -7,6 +7,7 @@ import type { ConfigSlice } from './slices/configSlice';
 import type { ConnectionSlice } from './slices/connectionSlice';
 import type { ContextSlice } from './slices/contextSlice';
 import type { ConversationSlice } from './slices/conversationSlice';
+import type { ImportSlice } from './slices/importSlice';
 import type { MemorySlice } from './slices/memorySlice';
 import type { NotificationSlice } from './slices/notificationSlice';
 import type { PaneSlice } from './slices/paneSlice';
@@ -92,4 +93,5 @@ export type AppState = ProjectSlice &
   ConnectionSlice &
   ContextSlice &
   UpdateSlice &
-  MemorySlice;
+  MemorySlice &
+  ImportSlice;

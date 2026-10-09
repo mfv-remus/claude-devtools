@@ -1,3 +1,4 @@
+import { parseImportProjectId } from '@shared/utils/importProjectId';
 import * as os from 'os';
 import * as path from 'path';
 
@@ -213,6 +214,55 @@ export function extractSessionId(filename: string): string {
 }
 
 // =============================================================================
+// Imports (virtual projects `import:<uuid>`)
+// =============================================================================
+
+/**
+ * Resolves `import:*` projects to files under IMPORTS_ROOT. Registered at startup only
+ * when imports are enabled; the path builders below are the only code that knows imports
+ * live outside the projects directory.
+ */
+export interface ImportPathResolver {
+  /** Absolute IMPORTS_ROOT */
+  root: string;
+  sessionFile(importId: string, sessionId: string): string | null;
+  subagentsDir(importId: string, sessionId: string): string | null;
+}
+
+let importPathResolver: ImportPathResolver | null = null;
+
+export function setImportPathResolver(resolver: ImportPathResolver | null): void {
+  importPathResolver = resolver;
+}
+
+/**
+ * Unresolvable imports (unknown id, unknown session, no subagents) map to a path that never
+ * exists, so callers take their normal "file not found" route instead of throwing.
+ */
+function resolveImportPath(
+  kind: 'session' | 'subagents',
+  importId: string,
+  sessionId: string
+): string {
+  if (!importPathResolver) {
+    throw new Error('Imports are not enabled on this server');
+  }
+  const { root } = importPathResolver;
+  const resolved =
+    kind === 'session'
+      ? importPathResolver.sessionFile(importId, sessionId)
+      : importPathResolver.subagentsDir(importId, sessionId);
+  // Defence in depth: whatever the resolver returned must lie inside IMPORTS_ROOT.
+  if (resolved) {
+    const relative = path.relative(root, resolved);
+    if (relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)) {
+      return resolved;
+    }
+  }
+  return path.join(root, '.unresolved-import', kind);
+}
+
+// =============================================================================
 // Path Construction
 // =============================================================================
 
@@ -221,6 +271,8 @@ export function extractSessionId(filename: string): string {
  * Handles composite project IDs by extracting the base directory.
  */
 export function buildSessionPath(basePath: string, projectId: string, sessionId: string): string {
+  const importId = parseImportProjectId(projectId);
+  if (importId) return resolveImportPath('session', importId, sessionId);
   return path.join(basePath, extractBaseDir(projectId), `${sessionId}.jsonl`);
 }
 
@@ -229,6 +281,8 @@ export function buildSessionPath(basePath: string, projectId: string, sessionId:
  * Handles composite project IDs by extracting the base directory.
  */
 export function buildSubagentsPath(basePath: string, projectId: string, sessionId: string): string {
+  const importId = parseImportProjectId(projectId);
+  if (importId) return resolveImportPath('subagents', importId, sessionId);
   return path.join(basePath, extractBaseDir(projectId), sessionId, 'subagents');
 }
 

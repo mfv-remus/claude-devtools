@@ -22,9 +22,11 @@ import {
   getTaskCalls,
   parseJsonlFile,
 } from '@main/utils/jsonl';
+import { parseImportProjectId } from '@shared/utils/importProjectId';
 import * as path from 'path';
 
 import { type ProjectScanner } from '../discovery/ProjectScanner';
+import { type ImportSessionSource } from '../imports/ImportSessionSource';
 
 /**
  * Result of parsing a session file.
@@ -54,8 +56,15 @@ export interface ParsedSession {
 export class SessionParser {
   private projectScanner: ProjectScanner;
 
+  private importSource: ImportSessionSource | null = null;
+
   constructor(projectScanner: ProjectScanner) {
     this.projectScanner = projectScanner;
+  }
+
+  /** Enables reading `import:*` projects (standalone server with IMPORTS_ROOT set). */
+  setImportSource(source: ImportSessionSource | null): void {
+    this.importSource = source;
   }
 
   // ===========================================================================
@@ -66,6 +75,12 @@ export class SessionParser {
    * Parse a session JSONL file and return structured data.
    */
   async parseSession(projectId: string, sessionId: string): Promise<ParsedSession> {
+    const importId = parseImportProjectId(projectId);
+    if (importId && this.importSource) {
+      // Eval traces are adapted in memory; other imports are normal session files.
+      const trace = await this.importSource.loadEvalTrace(importId, sessionId);
+      if (trace) return this.processMessages(trace.messages);
+    }
     const sessionPath = this.projectScanner.getSessionPath(projectId, sessionId);
     return this.parseSessionFile(sessionPath);
   }

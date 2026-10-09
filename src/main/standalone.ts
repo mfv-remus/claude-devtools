@@ -9,17 +9,21 @@
  * - HOST: Bind address (default '0.0.0.0')
  * - PORT: Listen port (default 3456)
  * - CLAUDE_ROOT: Path to .claude directory (default ~/.claude)
+ * - IMPORTS_ROOT: Directory for imported eval runs/sessions (unset = imports disabled)
+ * - IMPORTS_READONLY: 'true' disables upload/rename/delete
  * - CORS_ORIGIN: CORS origin policy (default '*')
  */
 
 import { createLogger } from '@shared/utils/logger';
 import * as path from 'path';
 
+import { ImportService, ImportSessionSource } from './services/imports';
 import { HttpServer } from './services/infrastructure/HttpServer';
 import {
   getProjectsBasePath,
   getTodosBasePath,
   setClaudeBasePathOverride,
+  setImportPathResolver,
 } from './utils/pathDecoder';
 import {
   ConfigManager,
@@ -41,6 +45,8 @@ const logger = createLogger('Standalone');
 const HOST = process.env.HOST ?? '0.0.0.0';
 const PORT = parseInt(process.env.PORT ?? '3456', 10);
 const CLAUDE_ROOT = process.env.CLAUDE_ROOT;
+const IMPORTS_ROOT = process.env.IMPORTS_ROOT;
+const IMPORTS_READONLY = process.env.IMPORTS_READONLY === 'true';
 
 // Default CORS to allow all in standalone mode (Docker isolation replaces CORS)
 if (!process.env.CORS_ORIGIN) {
@@ -153,6 +159,28 @@ async function start(): Promise<void> {
     httpServer.broadcast('notification:clicked', data);
   });
 
+  // Imports are optional: only enabled when IMPORTS_ROOT is set
+  let importService: ImportService | undefined;
+  let importSource: ImportSessionSource | undefined;
+  if (IMPORTS_ROOT) {
+    importService = new ImportService(IMPORTS_ROOT);
+    if (!IMPORTS_READONLY) {
+      await importService.init();
+      await importService.cleanupLeftovers();
+    }
+    setImportPathResolver({
+      root: importService.getRoot(),
+      sessionFile: (importId, sessionId) =>
+        importService!.resolveSessionFileSync(importId, sessionId),
+      subagentsDir: (importId, sessionId) =>
+        importService!.resolveSubagentsDirSync(importId, sessionId),
+    });
+    importSource = new ImportSessionSource(importService);
+    localContext.projectScanner.setImportSource(importSource);
+    localContext.sessionParser.setImportSource(importSource);
+    logger.info(`Imports directory: ${importService.getRoot()} (readonly: ${IMPORTS_READONLY})`);
+  }
+
   // Build services for HTTP routes
   const services: HttpServices = {
     projectScanner: localContext.projectScanner,
@@ -163,6 +191,9 @@ async function start(): Promise<void> {
     memoryReader: localContext.memoryReader,
     updaterService: updaterServiceStub,
     sshConnectionManager: sshConnectionManagerStub,
+    importService,
+    importSource,
+    importsReadonly: IMPORTS_READONLY,
   };
 
   // No-op mode switch handler (no SSH in standalone)

@@ -43,10 +43,11 @@ COPY --from=builder /app/dist-standalone ./dist-standalone
 COPY --from=builder /app/out/renderer ./out/renderer
 
 # Create data directory for Claude session mount
-RUN mkdir -p /data/.claude
+RUN mkdir -p /data/.claude /data/imports
 
 ENV NODE_ENV=production
 ENV CLAUDE_ROOT=/data/.claude
+ENV IMPORTS_ROOT=/data/imports
 ENV HOST=0.0.0.0
 ENV PORT=3456
 
