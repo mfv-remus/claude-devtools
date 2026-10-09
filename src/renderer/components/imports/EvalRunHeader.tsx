@@ -166,11 +166,6 @@ function traceNotices(meta: EvalTraceMeta | null): string[] {
   if (meta.hiddenSubagentLines > 0) {
     out.push(`${meta.hiddenSubagentLines} inline subagent lines are not shown.`);
   }
-  for (const d of meta.permissionDenials) {
-    const tool = d.toolName ? ` for ${d.toolName}` : '';
-    const reason = d.message ? `: ${d.message}` : '';
-    out.push(`Permission denied${tool}${reason}`);
-  }
   return out;
 }
 
