@@ -171,13 +171,6 @@ export function validateEvalRunBundle(
       if (arm === 'without' && runs.length > 0) anyWithout = true;
       maxRuns = Math.max(maxRuns, runs.length);
 
-      const runsPerCase = rawCase.runsPerCase;
-      if (!partial && typeof runsPerCase === 'number' && runs.length !== runsPerCase) {
-        errors.add(
-          `Case ${quote(caseName)}: ${runs.length} "${arm}" runs, expected runsPerCase=${runsPerCase}`
-        );
-      }
-
       runs.forEach((run: unknown, runIndex: number) => {
         const file = `traces/${caseName}/${arm}-${runIndex + 1}.jsonl`;
         expected.add(file);

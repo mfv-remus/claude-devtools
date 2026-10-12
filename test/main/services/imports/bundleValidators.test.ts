@@ -160,13 +160,12 @@ describe('validateEvalRunBundle', () => {
     ]);
   });
 
-  it('rejects a run count that disagrees with runsPerCase unless partial', () => {
+  it('accepts a run count that differs from runsPerCase', () => {
     const results = fakeResults({}, [
       { name: 'alpha', runsPerCase: 3, arms: { with: [{}, {}], without: [{}, {}] } },
     ]);
     const files = ['results.json', ...allTraces(['alpha'])];
-    expect(validateEvalRunBundle(files, results).errors[0]).toContain('expected runsPerCase=3');
-    expect(validateEvalRunBundle(files, { ...results, partial: true }).errors).toEqual([]);
+    expect(validateEvalRunBundle(files, results).errors).toEqual([]);
   });
 
   it('supports single-arm cases (no without runs)', () => {
