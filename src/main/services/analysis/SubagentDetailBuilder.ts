@@ -52,24 +52,38 @@ export async function buildSubagentDetail(
   projectsDir: string
 ): Promise<SubagentDetail | null> {
   try {
-    // Construct path to subagent JSONL file (session-scoped subagents/ directory)
-    const subagentPath = path.join(
-      buildSubagentsPath(projectsDir, projectId, sessionId),
-      `agent-${subagentId}.jsonl`
+    // Eval-run imports keep subagents inside the trace; there is no file to read.
+    const importSubagent = await subagentResolver.getImportSubagent(
+      projectId,
+      sessionId,
+      subagentId
     );
 
-    // Check if file exists
-    if (!(await fsProvider.exists(subagentPath))) {
-      logger.warn(`Subagent file not found: ${subagentPath}`);
-      return null;
+    let parsedSession;
+    let meta: { agentType?: string; description?: string } | null;
+    if (importSubagent) {
+      parsedSession = sessionParser.processParsedMessages(importSubagent.messages);
+      meta = { agentType: importSubagent.subagentType, description: importSubagent.description };
+    } else {
+      // Construct path to subagent JSONL file (session-scoped subagents/ directory)
+      const subagentPath = path.join(
+        buildSubagentsPath(projectsDir, projectId, sessionId),
+        `agent-${subagentId}.jsonl`
+      );
+
+      // Check if file exists
+      if (!(await fsProvider.exists(subagentPath))) {
+        logger.warn(`Subagent file not found: ${subagentPath}`);
+        return null;
+      }
+
+      // Parse subagent JSONL file
+      parsedSession = await sessionParser.parseSessionFile(subagentPath);
+
+      // Sidecar meta.json is the authoritative source for agentType/description —
+      // same file SubagentResolver reads when resolving subagents for the main chat view.
+      meta = await subagentResolver.readSubagentMeta(subagentPath);
     }
-
-    // Parse subagent JSONL file
-    const parsedSession = await sessionParser.parseSessionFile(subagentPath);
-
-    // Sidecar meta.json is the authoritative source for agentType/description —
-    // same file SubagentResolver reads when resolving subagents for the main chat view.
-    const meta = await subagentResolver.readSubagentMeta(subagentPath);
 
     // A subagent's own messages are all tagged isSidechain: true (relative to the parent
     // session), but buildChunksFn filters to `!isSidechain` assuming a top-level session's

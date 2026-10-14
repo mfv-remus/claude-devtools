@@ -139,12 +139,112 @@ describe('adaptEvalTrace', () => {
     expect(entries.map((e) => e.uuid)).toEqual(['a1', 'a1b']);
   });
 
-  it('hides inline subagent lines and warns', () => {
-    const sub = { ...assistantText, uuid: 'sub1', parent_tool_use_id: 'tool-1' };
-    const { entries, meta } = adapt([init, assistantTool, sub, assistantText]);
-    expect(entries.map((e) => e.uuid)).toEqual(['a1', 'a2']);
-    expect(meta.hiddenSubagentLines).toBe(1);
-    expect(meta.warnings.join(' ')).toContain('subagent');
+  describe('inline subagents', () => {
+    const taskStarted = {
+      type: 'system',
+      subtype: 'task_started',
+      uuid: 'u-ts',
+      task_id: 'agent-abc',
+      tool_use_id: 'tool-1',
+      description: 'Check the thing',
+      subagent_type: 'fake:checker',
+      prompt: 'Please check the thing',
+    };
+    const subAssistant = {
+      ...assistantText,
+      uuid: 'sub1',
+      timestamp: T1,
+      parent_tool_use_id: 'tool-1',
+    };
+    const subToolResult = {
+      ...toolResult,
+      uuid: 'sub2',
+      timestamp: T2,
+      parent_tool_use_id: 'tool-1',
+    };
+
+    it('moves them out of the main thread into one transcript per spawning task', () => {
+      const { entries, subagents, meta } = adapt([
+        init,
+        assistantTool,
+        taskStarted,
+        subAssistant,
+        subToolResult,
+        assistantText,
+        result,
+      ]);
+      expect(entries.map((e) => e.uuid)).toEqual(['a1', 'a2']);
+      expect(subagents).toHaveLength(1);
+      expect(subagents[0]).toMatchObject({
+        agentId: 'agent-abc',
+        toolUseId: 'tool-1',
+        description: 'Check the thing',
+        subagentType: 'fake:checker',
+      });
+      expect(meta.subagentCount).toBe(1);
+      expect(meta.hiddenSubagentLines).toBe(0);
+      expect(meta.warnings).toHaveLength(0);
+    });
+
+    it('marks lines as sidechain with the agent id and chains them from the prompt', () => {
+      const { subagents } = adapt([init, assistantTool, taskStarted, subAssistant, subToolResult]);
+      const lines = subagents[0].lines.map((line) => JSON.parse(line) as Record<string, unknown>);
+      expect(lines.map((e) => e.uuid)).toEqual([
+        'eval-subagent-prompt-agent-abc',
+        'sub1',
+        'sub2',
+      ]);
+      expect(lines.map((e) => e.parentUuid)).toEqual([null, 'eval-subagent-prompt-agent-abc', 'sub1']);
+      expect(lines.every((e) => e.isSidechain === true && e.agentId === 'agent-abc')).toBe(true);
+      expect(lines[0]).toMatchObject({
+        type: 'user',
+        message: { role: 'user', content: 'Please check the thing' },
+      });
+      expect(lines[0]).not.toHaveProperty('isMeta');
+      expect(Date.parse(lines[0].timestamp as string)).toBe(Date.parse(T1) - 1);
+      expect(lines[2]).toMatchObject({ isMeta: true, sourceToolUseID: 'tool-1' });
+    });
+
+    it('works regardless of which tool spawned the task and when task_started appears', () => {
+      const { subagents } = adapt([init, assistantTool, subAssistant, taskStarted, assistantText]);
+      expect(subagents.map((s) => s.agentId)).toEqual(['agent-abc']);
+    });
+
+    it('adds no prompt message when task_started has no prompt', () => {
+      const { subagents } = adapt([
+        init,
+        assistantTool,
+        { ...taskStarted, prompt: undefined },
+        subAssistant,
+      ]);
+      expect(subagents[0].lines).toHaveLength(1);
+      expect(JSON.parse(subagents[0].lines[0]).uuid).toBe('sub1');
+    });
+
+    it('keeps two tasks separate', () => {
+      const second = { ...taskStarted, task_id: 'agent-def', tool_use_id: 'tool-2' };
+      const secondLine = { ...subAssistant, uuid: 'sub3', parent_tool_use_id: 'tool-2' };
+      const { subagents } = adapt([
+        init,
+        assistantTool,
+        taskStarted,
+        second,
+        subAssistant,
+        secondLine,
+        assistantText,
+      ]);
+      expect(subagents.map((s) => s.agentId)).toEqual(['agent-abc', 'agent-def']);
+    });
+
+    it('hides lines that no task_started owns and warns', () => {
+      const orphan = { ...assistantText, uuid: 'sub9', parent_tool_use_id: 'tool-unknown' };
+      const { entries, subagents, meta } = adapt([init, assistantTool, orphan, assistantText]);
+      expect(entries.map((e) => e.uuid)).toEqual(['a1', 'a2']);
+      expect(subagents).toHaveLength(0);
+      expect(meta.subagentCount).toBe(0);
+      expect(meta.hiddenSubagentLines).toBe(1);
+      expect(meta.warnings.join(' ')).toContain('task_started');
+    });
   });
 
   it('warns, but still adapts, when init or result is missing', () => {

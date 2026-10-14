@@ -178,6 +178,7 @@ async function start(): Promise<void> {
     importSource = new ImportSessionSource(importService);
     localContext.projectScanner.setImportSource(importSource);
     localContext.sessionParser.setImportSource(importSource);
+    localContext.subagentResolver.setImportSource(importSource);
     logger.info(`Imports directory: ${importService.getRoot()} (readonly: ${IMPORTS_READONLY})`);
   }
 

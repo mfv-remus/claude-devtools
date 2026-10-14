@@ -72,7 +72,9 @@ export interface EvalTraceMeta {
   };
   /** `system/permission_denied` lines, keyed to the tool call they refer to */
   permissionDenials: { toolUseId: string; toolName?: string; message?: string }[];
-  /** Lines that belong to inline subagents (parent_tool_use_id set); hidden in v1 */
+  /** Subagent transcripts rebuilt from inline lines (parent_tool_use_id set) */
+  subagentCount: number;
+  /** Inline subagent lines that match no `task_started` line, so no subagent can own them */
   hiddenSubagentLines: number;
   /** Lines that were not valid JSON or had an unknown type */
   ignoredLines: number;

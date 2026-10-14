@@ -12,8 +12,11 @@
 
 import { type ParsedMessage, type Process, type SessionMetrics, type ToolCall } from '@main/types';
 import { calculateMetrics, checkMessagesOngoing, parseJsonlFile } from '@main/utils/jsonl';
+import { parseImportProjectId } from '@shared/utils/importProjectId';
 import { createLogger } from '@shared/utils/logger';
 import * as path from 'path';
+
+import { type ImportSessionSource, type LoadedEvalSubagent } from '../imports/ImportSessionSource';
 
 import { type ProjectScanner } from './ProjectScanner';
 
@@ -33,9 +36,15 @@ interface SubagentMetaFile {
 
 export class SubagentResolver {
   private projectScanner: ProjectScanner;
+  private importSource: ImportSessionSource | null = null;
 
   constructor(projectScanner: ProjectScanner) {
     this.projectScanner = projectScanner;
+  }
+
+  /** Enables eval-run imports, whose subagents live inside the trace rather than in files. */
+  setImportSource(source: ImportSessionSource | null): void {
+    this.importSource = source;
   }
 
   // ===========================================================================
@@ -51,6 +60,14 @@ export class SubagentResolver {
     taskCalls: ToolCall[],
     messages?: ParsedMessage[]
   ): Promise<Process[]> {
+    const importSubagents = await this.loadImportSubagents(projectId, sessionId);
+    if (importSubagents) {
+      const processes = importSubagents
+        .map((subagent) => this.buildImportProcess(subagent))
+        .filter((s): s is Process => s !== null);
+      return this.finalizeSubagents(processes, taskCalls, messages);
+    }
+
     // Get subagent files
     const subagentFiles = await this.projectScanner.listSubagentFiles(projectId, sessionId);
 
@@ -69,6 +86,50 @@ export class SubagentResolver {
     // Filter out failed parses
     const validSubagents = subagents.filter((s): s is Process => s !== null);
 
+    return this.finalizeSubagents(validSubagents, taskCalls, messages);
+  }
+
+  /**
+   * One subagent of an eval-run import (its transcript is rebuilt from the trace), or null
+   * when the project is not an eval-run import or the subagent does not exist.
+   */
+  async getImportSubagent(
+    projectId: string,
+    sessionId: string,
+    subagentId: string
+  ): Promise<Process | null> {
+    const loaded = await this.loadImportSubagents(projectId, sessionId);
+    const found = loaded?.find((subagent) => subagent.id === subagentId);
+    return found ? this.buildImportProcess(found) : null;
+  }
+
+  private async loadImportSubagents(
+    projectId: string,
+    sessionId: string
+  ): Promise<LoadedEvalSubagent[] | null> {
+    const importId = parseImportProjectId(projectId);
+    if (!importId || !this.importSource) return null;
+    try {
+      return await this.importSource.loadEvalSubagents(importId, sessionId);
+    } catch (error) {
+      logger.error(`Error loading eval subagents for ${projectId}/${sessionId}:`, error);
+      return [];
+    }
+  }
+
+  private buildImportProcess(subagent: LoadedEvalSubagent): Process | null {
+    return this.buildProcess(subagent.messages, subagent.id, '', {
+      agentType: subagent.subagentType,
+      description: subagent.description,
+    });
+  }
+
+  /** Link, propagate team data, detect parallelism and sort. */
+  private finalizeSubagents(
+    validSubagents: Process[],
+    taskCalls: ToolCall[],
+    messages?: ParsedMessage[]
+  ): Process[] {
     // Link to Task calls using tool result data from parent session messages
     this.linkToTaskCalls(validSubagents, taskCalls, messages ?? []);
 
@@ -100,56 +161,61 @@ export class SubagentResolver {
     try {
       const messages = await parseJsonlFile(filePath, this.projectScanner.getFileSystemProvider());
 
-      if (messages.length === 0) {
-        return null;
-      }
-
-      // Filter out warmup subagents - these are pre-warming agents spawned by Claude Code
-      // that have "Warmup" as the first user message and should not be displayed
-      if (this.isWarmupSubagent(messages)) {
-        return null;
-      }
-
       // Extract agent ID from filename (agent-{id}.jsonl)
       const filename = path.basename(filePath);
       const agentId = filename.replace(/^agent-/, '').replace(/\.jsonl$/, '');
-
-      // Filter out compact files (context compaction artifacts, not real subagents)
-      if (agentId.startsWith('acompact')) {
-        return null;
-      }
-
-      // Calculate timing
-      const { startTime, endTime, durationMs } = this.calculateTiming(messages);
-
-      // Calculate metrics
-      const metrics = calculateMetrics(messages);
-
-      // Check if subagent is still in progress
-      const isOngoing = checkMessagesOngoing(messages);
 
       // Read sidecar meta file for authoritative agentType/description.
       // This is the only source of type info for subagents with no linkable Task call
       // (e.g. forked sessions), and takes precedence over the Task-call heuristic otherwise.
       const meta = await this.readSubagentMeta(filePath);
 
-      return {
-        id: agentId,
-        filePath,
-        messages,
-        startTime,
-        endTime,
-        durationMs,
-        metrics,
-        isParallel: false, // Will be set by detectParallelExecution
-        isOngoing,
-        subagentType: meta?.agentType,
-        description: meta?.description,
-      };
+      return this.buildProcess(messages, agentId, filePath, meta);
     } catch (error) {
       logger.error(`Error parsing subagent file ${filePath}:`, error);
       return null;
     }
+  }
+
+  /** Build a Process from a subagent's parsed messages, or null for files that are not shown. */
+  private buildProcess(
+    messages: ParsedMessage[],
+    agentId: string,
+    filePath: string,
+    meta: SubagentMetaFile | null
+  ): Process | null {
+    if (messages.length === 0) {
+      return null;
+    }
+
+    // Filter out warmup subagents - these are pre-warming agents spawned by Claude Code
+    // that have "Warmup" as the first user message and should not be displayed
+    if (this.isWarmupSubagent(messages)) {
+      return null;
+    }
+
+    // Filter out compact files (context compaction artifacts, not real subagents)
+    if (agentId.startsWith('acompact')) {
+      return null;
+    }
+
+    // Calculate timing
+    const { startTime, endTime, durationMs } = this.calculateTiming(messages);
+
+    return {
+      id: agentId,
+      filePath,
+      messages,
+      startTime,
+      endTime,
+      durationMs,
+      metrics: calculateMetrics(messages),
+      isParallel: false, // Will be set by detectParallelExecution
+      // Check if subagent is still in progress
+      isOngoing: checkMessagesOngoing(messages),
+      subagentType: meta?.agentType,
+      description: meta?.description,
+    };
   }
 
   /**
