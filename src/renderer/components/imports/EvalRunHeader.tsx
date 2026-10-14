@@ -164,7 +164,9 @@ function traceNotices(meta: EvalTraceMeta | null): string[] {
   if (!meta.hasInit) out.push('This trace has no init line; model and version are unknown.');
   if (!meta.hasResult) out.push('This trace has no result line; it may be truncated.');
   if (meta.hiddenSubagentLines > 0) {
-    out.push(`${meta.hiddenSubagentLines} inline subagent lines are not shown.`);
+    out.push(
+      `${meta.hiddenSubagentLines} subagent lines could not be attributed to a subagent and are not shown.`
+    );
   }
   return out;
 }

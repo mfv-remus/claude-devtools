@@ -12,7 +12,7 @@ import { analyzeSessionFileMetadata, analyzeSessionLines, parseJsonlLine } from 
 import * as fs from 'fs';
 import * as readline from 'readline';
 
-import { adaptEvalTrace } from './EvalTraceAdapter';
+import { type AdaptedEvalSubagent, adaptEvalTrace } from './EvalTraceAdapter';
 
 import type { ImportService } from './ImportService';
 import type { ParsedMessage } from '@main/types';
@@ -22,6 +22,23 @@ import type { EvalTraceMeta } from '@shared/types/imports';
 export interface LoadedEvalTrace {
   messages: ParsedMessage[];
   meta: EvalTraceMeta;
+}
+
+export interface LoadedEvalSubagent {
+  /** `task_started.task_id`; the id the parent's tool result carries as `agentId` */
+  id: string;
+  description?: string;
+  subagentType?: string;
+  messages: ParsedMessage[];
+}
+
+function parseLines(lines: string[]): ParsedMessage[] {
+  const messages: ParsedMessage[] = [];
+  for (const line of lines) {
+    const parsed = parseJsonlLine(line);
+    if (parsed) messages.push(parsed);
+  }
+  return messages;
 }
 
 async function readLines(filePath: string): Promise<string[]> {
@@ -47,12 +64,27 @@ export class ImportSessionSource {
     if (!source) return null;
     const adapted = adaptEvalTrace(await readLines(source.filePath), { prompt: source.prompt });
     if (!adapted.ok) throw new Error(adapted.error);
-    const messages: ParsedMessage[] = [];
-    for (const line of adapted.lines) {
-      const parsed = parseJsonlLine(line);
-      if (parsed) messages.push(parsed);
-    }
-    return { messages, meta: adapted.meta };
+    return { messages: parseLines(adapted.lines), meta: adapted.meta };
+  }
+
+  /**
+   * Subagent transcripts of an eval trace, rebuilt from its inline lines, or null when this
+   * is not an eval-run trace. Throws like loadEvalTrace when the trace itself is unusable.
+   */
+  async loadEvalSubagents(
+    importId: string,
+    sessionId: string
+  ): Promise<LoadedEvalSubagent[] | null> {
+    const source = await this.service.getEvalTraceSource(importId, sessionId);
+    if (!source) return null;
+    const adapted = adaptEvalTrace(await readLines(source.filePath), { prompt: source.prompt });
+    if (!adapted.ok) throw new Error(adapted.error);
+    return adapted.subagents.map((subagent: AdaptedEvalSubagent) => ({
+      id: subagent.agentId,
+      description: subagent.description,
+      subagentType: subagent.subagentType,
+      messages: parseLines(subagent.lines),
+    }));
   }
 
   /** Adapter metadata of one eval trace (warnings, run totals, denials), or null. */
@@ -70,11 +102,13 @@ export class ImportSessionSource {
     if (!manifest || !filePath) return null;
 
     let metadata;
+    let hasSubagents = (manifest.subagentCount ?? 0) > 0;
     if (manifest.type === 'eval-run') {
       const source = await this.service.getEvalTraceSource(importId, sessionId);
       if (!source) return null;
       const adapted = adaptEvalTrace(await readLines(source.filePath), { prompt: source.prompt });
       if (!adapted.ok) return null;
+      hasSubagents = adapted.meta.subagentCount > 0;
       metadata = await analyzeSessionLines(
         (async function* () {
           await Promise.resolve();
@@ -99,7 +133,7 @@ export class ImportSessionSource {
       updatedAt: Math.floor(importedAt),
       firstMessage: metadata.firstUserMessage?.text,
       messageTimestamp: metadata.firstUserMessage?.timestamp,
-      hasSubagents: (manifest.subagentCount ?? 0) > 0,
+      hasSubagents,
       messageCount: metadata.messageCount,
       isOngoing: false,
       gitBranch: metadata.gitBranch ?? undefined,

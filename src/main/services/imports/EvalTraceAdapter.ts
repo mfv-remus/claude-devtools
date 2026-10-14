@@ -11,7 +11,10 @@
  * - no `parentUuid`: synthesized from line order
  * - `system/init` is kept as metadata, `system/thinking_tokens` is dropped, `result` is
  *   kept as run totals, anything unknown is ignored (the format is not documented)
- * - inline subagent lines (`parent_tool_use_id` set) are hidden and counted in v1
+ * - inline subagent lines (`parent_tool_use_id` set) are grouped by the `system/task_started`
+ *   line that spawned them and returned as separate transcripts (agentId = task_id), each
+ *   opened by a synthetic user message holding `task_started.prompt`; lines no task owns are
+ *   counted as hidden
  */
 
 import type { EvalTraceMeta } from '@shared/types/imports';
@@ -21,8 +24,19 @@ export interface AdaptEvalTraceOptions {
   prompt?: string;
 }
 
+/** One subagent transcript, in the shape of a Claude Code `agent-{id}.jsonl` file */
+export interface AdaptedEvalSubagent {
+  /** `task_started.task_id` */
+  agentId: string;
+  /** tool_use id of the call that spawned it (Agent, Task or Skill) */
+  toolUseId: string;
+  description?: string;
+  subagentType?: string;
+  lines: string[];
+}
+
 export type AdaptEvalTraceResult =
-  | { ok: true; lines: string[]; meta: EvalTraceMeta }
+  | { ok: true; lines: string[]; subagents: AdaptedEvalSubagent[]; meta: EvalTraceMeta }
   | { ok: false; error: string };
 
 type RawLine = Record<string, unknown>;
@@ -51,12 +65,19 @@ export function adaptEvalTrace(
     hasInit: false,
     hasResult: false,
     permissionDenials: [],
+    subagentCount: 0,
     hiddenSubagentLines: 0,
     ignoredLines: 0,
     warnings: [],
   };
 
   const entries: RawLine[] = [];
+  /** subagent lines by `parent_tool_use_id`, in trace order */
+  const subagentEntries = new Map<string, RawLine[]>();
+  /** spawning tool_use id -> its `system/task_started` line */
+  const taskStarts = new Map<string, RawLine>();
+  /** spawning tool_use id -> its `system/task_notification` line (the subagent has finished) */
+  const taskNotifications = new Map<string, RawLine>();
   /** tool_use id -> uuid of the assistant line that issued it */
   const toolUseOwner = new Map<string, string>();
   let cwd: string | undefined;
@@ -88,6 +109,12 @@ export function adaptEvalTrace(
         cwd = asString(line.cwd);
         meta.cwd = cwd;
         sessionId = asString(line.session_id);
+      } else if (subtype === 'task_started') {
+        const toolUseId = asString(line.tool_use_id);
+        if (toolUseId && asString(line.task_id)) taskStarts.set(toolUseId, line);
+      } else if (subtype === 'task_notification') {
+        const toolUseId = asString(line.tool_use_id);
+        if (toolUseId) taskNotifications.set(toolUseId, line);
       } else if (subtype === 'permission_denied') {
         const toolUseId = asString(line.tool_use_id);
         if (toolUseId) {
@@ -120,10 +147,7 @@ export function adaptEvalTrace(
       continue;
     }
 
-    if (line.parent_tool_use_id != null) {
-      meta.hiddenSubagentLines++;
-      continue;
-    }
+    const parentToolUseId = asString(line.parent_tool_use_id);
 
     const uuid = asString(line.uuid);
     if (!uuid || !isRecord(line.message)) {
@@ -137,13 +161,13 @@ export function adaptEvalTrace(
       timestamp: line.timestamp,
       sessionId: sessionId ?? asString(line.session_id),
       cwd,
-      isSidechain: false,
+      isSidechain: parentToolUseId !== undefined,
       userType: 'external',
       message: line.message,
     };
 
     if (type === 'assistant') {
-      assistantCount++;
+      if (parentToolUseId === undefined) assistantCount++;
       const requestId = asString(line.request_id);
       if (requestId) entry.requestId = requestId;
       for (const block of contentBlocks(line.message)) {
@@ -164,7 +188,13 @@ export function adaptEvalTrace(
         if (isRecord(line.tool_use_result)) entry.toolUseResult = line.tool_use_result;
       }
     }
-    entries.push(entry);
+    if (parentToolUseId !== undefined) {
+      const group = subagentEntries.get(parentToolUseId);
+      if (group) group.push(entry);
+      else subagentEntries.set(parentToolUseId, [entry]);
+    } else {
+      entries.push(entry);
+    }
   }
 
   if (assistantCount === 0) {
@@ -175,9 +205,65 @@ export function adaptEvalTrace(
     meta.warnings.push('The trace has no system/init line (model and cwd unknown)');
   if (!meta.hasResult)
     meta.warnings.push('The trace has no result line (the run may have been killed)');
+
+  const subagents: AdaptedEvalSubagent[] = [];
+  for (const [toolUseId, group] of subagentEntries) {
+    const started = taskStarts.get(toolUseId);
+    if (!started) {
+      meta.hiddenSubagentLines += group.length;
+      continue;
+    }
+    const agentId = asString(started.task_id)!;
+    for (const entry of group) entry.agentId = agentId;
+    const subagentPrompt = asString(started.prompt);
+    const firstMs = group
+      .map((entry) => Date.parse(String(entry.timestamp)))
+      .find((ms) => Number.isFinite(ms));
+    if (subagentPrompt) {
+      group.unshift({
+        type: 'user',
+        uuid: `eval-subagent-prompt-${agentId}`,
+        timestamp: new Date((firstMs ?? Date.now()) - 1).toISOString(),
+        sessionId,
+        cwd,
+        agentId,
+        isSidechain: true,
+        userType: 'external',
+        message: { role: 'user', content: subagentPrompt },
+      });
+    }
+    // The stream never carries a subagent's final text, only the `task_notification` summary.
+    // Without a closing text message the transcript ends on a tool_result and reads as ongoing.
+    const summary = asString(taskNotifications.get(toolUseId)?.summary);
+    if (summary && summary.trim() !== '') {
+      const lastMs = group
+        .map((entry) => Date.parse(String(entry.timestamp)))
+        .filter((ms) => Number.isFinite(ms))
+        .pop();
+      group.push({
+        type: 'assistant',
+        uuid: `eval-subagent-result-${agentId}`,
+        timestamp: new Date((lastMs ?? Date.now()) + 1).toISOString(),
+        sessionId,
+        cwd,
+        agentId,
+        isSidechain: true,
+        userType: 'external',
+        message: { role: 'assistant', content: [{ type: 'text', text: summary }] },
+      });
+    }
+    subagents.push({
+      agentId,
+      toolUseId,
+      description: asString(started.description),
+      subagentType: asString(started.subagent_type),
+      lines: chainLines(group),
+    });
+  }
+  meta.subagentCount = subagents.length;
   if (meta.hiddenSubagentLines > 0) {
     meta.warnings.push(
-      `${meta.hiddenSubagentLines} subagent line(s) inside this trace are not shown in this version`
+      `${meta.hiddenSubagentLines} subagent line(s) have no matching task_started line and are not shown`
     );
   }
 
@@ -199,10 +285,12 @@ export function adaptEvalTrace(
     });
   }
 
-  // Parent chain by line order (the trace has none).
-  const lines = entries.map((entry, index) =>
+  return { ok: true, lines: chainLines(entries), subagents, meta };
+}
+
+/** Parent chain by line order (the trace has none). */
+function chainLines(entries: RawLine[]): string[] {
+  return entries.map((entry, index) =>
     JSON.stringify({ ...entry, parentUuid: index === 0 ? null : entries[index - 1].uuid })
   );
-
-  return { ok: true, lines, meta };
 }

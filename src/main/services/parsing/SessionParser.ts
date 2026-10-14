@@ -93,6 +93,11 @@ export class SessionParser {
     return this.processMessages(messages);
   }
 
+  /** Structure messages that were not read from a file (e.g. adapted eval traces). */
+  processParsedMessages(messages: ParsedMessage[]): ParsedSession {
+    return this.processMessages(messages);
+  }
+
   /**
    * Process parsed messages into structured data.
    */
