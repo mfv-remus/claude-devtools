@@ -236,6 +236,42 @@ describe('adaptEvalTrace', () => {
       expect(subagents.map((s) => s.agentId)).toEqual(['agent-abc', 'agent-def']);
     });
 
+    it('closes a finished subagent with its task_notification summary as a final text message', () => {
+      const notification = {
+        type: 'system',
+        subtype: 'task_notification',
+        uuid: 'u-tn',
+        task_id: 'agent-abc',
+        tool_use_id: 'tool-1',
+        status: 'completed',
+        summary: 'All checked',
+      };
+      const { subagents } = adapt([
+        init,
+        assistantTool,
+        taskStarted,
+        subToolResult,
+        notification,
+        assistantText,
+      ]);
+      const lines = subagents[0].lines.map((line) => JSON.parse(line) as Record<string, unknown>);
+      const last = lines[lines.length - 1];
+      expect(last).toMatchObject({
+        type: 'assistant',
+        uuid: 'eval-subagent-result-agent-abc',
+        isSidechain: true,
+        agentId: 'agent-abc',
+        parentUuid: 'sub2',
+        message: { content: [{ type: 'text', text: 'All checked' }] },
+      });
+      expect(Date.parse(last.timestamp as string)).toBe(Date.parse(T2) + 1);
+    });
+
+    it('leaves a subagent without a task_notification summary unclosed', () => {
+      const { subagents } = adapt([init, assistantTool, taskStarted, subToolResult, assistantText]);
+      expect(subagents[0].lines).toHaveLength(2);
+    });
+
     it('hides lines that no task_started owns and warns', () => {
       const orphan = { ...assistantText, uuid: 'sub9', parent_tool_use_id: 'tool-unknown' };
       const { entries, subagents, meta } = adapt([init, assistantTool, orphan, assistantText]);

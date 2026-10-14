@@ -76,6 +76,8 @@ export function adaptEvalTrace(
   const subagentEntries = new Map<string, RawLine[]>();
   /** spawning tool_use id -> its `system/task_started` line */
   const taskStarts = new Map<string, RawLine>();
+  /** spawning tool_use id -> its `system/task_notification` line (the subagent has finished) */
+  const taskNotifications = new Map<string, RawLine>();
   /** tool_use id -> uuid of the assistant line that issued it */
   const toolUseOwner = new Map<string, string>();
   let cwd: string | undefined;
@@ -110,6 +112,9 @@ export function adaptEvalTrace(
       } else if (subtype === 'task_started') {
         const toolUseId = asString(line.tool_use_id);
         if (toolUseId && asString(line.task_id)) taskStarts.set(toolUseId, line);
+      } else if (subtype === 'task_notification') {
+        const toolUseId = asString(line.tool_use_id);
+        if (toolUseId) taskNotifications.set(toolUseId, line);
       } else if (subtype === 'permission_denied') {
         const toolUseId = asString(line.tool_use_id);
         if (toolUseId) {
@@ -225,6 +230,26 @@ export function adaptEvalTrace(
         isSidechain: true,
         userType: 'external',
         message: { role: 'user', content: subagentPrompt },
+      });
+    }
+    // The stream never carries a subagent's final text, only the `task_notification` summary.
+    // Without a closing text message the transcript ends on a tool_result and reads as ongoing.
+    const summary = asString(taskNotifications.get(toolUseId)?.summary);
+    if (summary && summary.trim() !== '') {
+      const lastMs = group
+        .map((entry) => Date.parse(String(entry.timestamp)))
+        .filter((ms) => Number.isFinite(ms))
+        .pop();
+      group.push({
+        type: 'assistant',
+        uuid: `eval-subagent-result-${agentId}`,
+        timestamp: new Date((lastMs ?? Date.now()) + 1).toISOString(),
+        sessionId,
+        cwd,
+        agentId,
+        isSidechain: true,
+        userType: 'external',
+        message: { role: 'assistant', content: [{ type: 'text', text: summary }] },
       });
     }
     subagents.push({
