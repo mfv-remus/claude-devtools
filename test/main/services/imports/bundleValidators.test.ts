@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  MAX_REPORT_BYTES,
   validateEvalRunBundle,
   validateSessionBundle,
 } from '../../../../src/main/services/imports/bundleValidators';
@@ -62,12 +63,35 @@ describe('validateEvalRunBundle', () => {
     expect(result.extract).toEqual(['results.json', ...result.traces.map((t) => t.file)]);
   });
 
-  it('skips aggregate-result.json and report.html without error', () => {
+  it('skips aggregate-result.json and extracts report.html', () => {
     const files = [...FULL_FILES, 'aggregate-result.json', 'report.html'];
     const result = validateEvalRunBundle(files, fakeResults());
     expect(result.errors).toEqual([]);
-    expect(result.ignored).toEqual(['aggregate-result.json', 'report.html']);
+    expect(result.ignored).toEqual(['aggregate-result.json']);
+    expect(result.hasReport).toBe(true);
+    expect(result.extract).toContain('report.html');
+  });
+
+  it('reports no report when report.html is absent', () => {
+    const result = validateEvalRunBundle(FULL_FILES, fakeResults());
+    expect(result.hasReport).toBe(false);
     expect(result.extract).not.toContain('report.html');
+  });
+
+  it('skips a report.html over the size cap without failing the bundle', () => {
+    const files = [...FULL_FILES, 'report.html'];
+    const sizes = new Map([['report.html', MAX_REPORT_BYTES + 1]]);
+    const result = validateEvalRunBundle(files, fakeResults(), sizes);
+    expect(result.errors).toEqual([]);
+    expect(result.hasReport).toBe(false);
+    expect(result.ignored).toEqual(['report.html']);
+    expect(result.extract).not.toContain('report.html');
+  });
+
+  it('rejects a report.html that is not at the root as an unexpected file', () => {
+    const result = validateEvalRunBundle([...FULL_FILES, 'sub/report.html'], fakeResults());
+    expect(result.errors[0]).toContain('Unexpected file');
+    expect(result.hasReport).toBe(false);
   });
 
   it('rejects when results.json is missing', () => {

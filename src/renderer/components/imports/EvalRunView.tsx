@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { importsApi } from '@renderer/api/imports';
 import { useStore } from '@renderer/store';
 import {
   averageCost,
@@ -121,6 +122,20 @@ export const EvalRunView = ({ importId }: EvalRunViewProps): React.JSX.Element =
         {manifest.summary}
         {manifest.claudeVersion ? ` · Claude Code ${manifest.claudeVersion}` : ''}
       </p>
+      {manifest.hasReport && (
+        <a
+          href={importsApi.getReportUrl(importId)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-block rounded border px-2 py-1 text-xs"
+          style={{
+            borderColor: 'var(--color-border-emphasis)',
+            color: 'var(--color-text)',
+          }}
+        >
+          Open report
+        </a>
+      )}
 
       {resultsError && (
         <p role="alert" className="mt-4 text-sm" style={{ color: 'var(--warning-text)' }}>

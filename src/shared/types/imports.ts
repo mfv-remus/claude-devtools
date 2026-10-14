@@ -38,6 +38,8 @@ export interface ImportManifest {
   claudeVersion?: string;
   /** eval-run: results.json schemaVersion */
   schemaVersion?: number;
+  /** eval-run: report.html from the Claude Eval Plugin was stored with the import */
+  hasReport?: boolean;
   /** eval-run: true when the suite did not finish */
   partial?: boolean;
   partialReason?: string;

@@ -75,6 +75,10 @@ export const importsApi = {
       `/api/imports/${encodeURIComponent(id)}/traces/${encodeURIComponent(sessionId)}/meta`
     ),
 
+  /** URL of the stored report.html; open it in a new tab (a blob URL would drop the CSP sandbox). */
+  getReportUrl: (id: string): string =>
+    `${getHttpBaseUrl()}/api/imports/${encodeURIComponent(id)}/report`,
+
   rename: (id: string, name: string): Promise<ImportManifest> =>
     request<ImportManifest>(`/api/imports/${encodeURIComponent(id)}`, {
       method: 'PATCH',

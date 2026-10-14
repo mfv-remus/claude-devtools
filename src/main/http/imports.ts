@@ -5,6 +5,7 @@
  * - GET    /api/imports/capabilities  -> { enabled, readonly }
  * - GET    /api/imports               -> list (valid and invalid entries)
  * - POST   /api/imports               -> multipart upload: type, name, file (.zip)
+ * - GET    /api/imports/:id/report    -> stored report.html (sandboxed)
  * - PATCH  /api/imports/:id           -> rename
  * - DELETE /api/imports/:id           -> delete
  *
@@ -195,6 +196,27 @@ export function registerImportRoutes(app: FastifyInstance, options: ImportRouteO
       } catch (error) {
         logger.error('Error in GET /api/imports/:id/results:', error);
         return reply.status(500).send({ error: 'Failed to read eval results' });
+      }
+    });
+
+    // report.html is sender-controlled HTML: sandbox it without allow-same-origin so its
+    // scripts cannot reach this origin's API, and never let the browser sniff another type.
+    scope.get<{ Params: { id: string } }>('/api/imports/:id/report', async (request, reply) => {
+      if (!isImportId(request.params.id)) {
+        return reply.status(400).send({ error: 'Invalid import id' });
+      }
+      try {
+        const reportPath = await service.resolveReportFile(request.params.id);
+        if (!reportPath) return await reply.status(404).send({ error: 'Report not found' });
+        return await reply
+          .header('Content-Type', 'text/html; charset=utf-8')
+          .header('Content-Security-Policy', 'sandbox allow-scripts')
+          .header('X-Content-Type-Options', 'nosniff')
+          .header('Cache-Control', 'no-store')
+          .send(fs.createReadStream(reportPath));
+      } catch (error) {
+        logger.error('Error in GET /api/imports/:id/report:', error);
+        return reply.status(500).send({ error: 'Failed to read the report' });
       }
     });
 

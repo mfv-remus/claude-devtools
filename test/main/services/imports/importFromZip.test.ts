@@ -89,14 +89,30 @@ describe('importFromZip', () => {
         summary: '2 cases × 2 arms × 1 run',
         claudeVersion: '9.9.9',
         schemaVersion: 1,
+        hasReport: true,
       });
       expect(result.manifest.traces).toHaveLength(4);
-      expect(result.ignored.sort()).toEqual(['aggregate-result.json', 'report.html']);
+      expect(result.ignored).toEqual(['aggregate-result.json']);
 
       const dir = path.join(root, result.manifest.id);
-      expect(fs.readdirSync(dir).sort()).toEqual(['manifest.json', 'results.json', 'traces']);
+      expect(fs.readdirSync(dir).sort()).toEqual([
+        'manifest.json',
+        'report.html',
+        'results.json',
+        'traces',
+      ]);
+      const reportFile = await service.resolveReportFile(result.manifest.id);
+      expect(reportFile && fs.readFileSync(reportFile, 'utf8')).toBe('<script>x</script>');
       const traceFile = await service.resolveSessionFile(result.manifest.id, 't001');
       expect(traceFile && fs.readFileSync(traceFile, 'utf8')).toBe('{"type":"x"}\n');
+    });
+
+    it('imports without a report and offers none', async () => {
+      const result = await run(zip(evalEntries()));
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.manifest.hasReport).toBeUndefined();
+      expect(await service.resolveReportFile(result.manifest.id)).toBeNull();
     });
 
     it('rejects a missing trace and leaves nothing behind', async () => {
