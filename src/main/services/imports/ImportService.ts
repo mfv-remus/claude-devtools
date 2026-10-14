@@ -326,6 +326,13 @@ export class ImportService {
     }
   }
 
+  /** Absolute path of an eval-run import's stored report.html, or null when it has none. */
+  async resolveReportFile(importId: string): Promise<string | null> {
+    const manifest = await this.get(importId);
+    if (manifest?.type !== 'eval-run' || !manifest.hasReport) return null;
+    return this.resolveInsideImport(importId, 'report.html');
+  }
+
   private async readCasePrompt(importId: string, caseName: string): Promise<string | undefined> {
     const resultsPath = await this.resolveInsideImport(importId, 'results.json');
     if (!resultsPath) return undefined;

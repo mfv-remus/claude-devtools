@@ -88,6 +88,22 @@ describe('EvalRunView', () => {
     expect(openImportTrace).toHaveBeenCalledWith(ID, traces[1]);
   });
 
+  it('hides the report link when the import has no report', () => {
+    expect([...container.querySelectorAll('a')].map((a) => a.textContent)).not.toContain(
+      'Open report'
+    );
+  });
+
+  it('links to the sandboxed report in a new tab when the import has one', () => {
+    const entry = storeState.imports as { manifest: Record<string, unknown> }[];
+    entry[0].manifest.hasReport = true;
+    act(() => root.render(createElement(EvalRunView, { importId: ID })));
+    const link = [...container.querySelectorAll('a')].find((a) => a.textContent === 'Open report');
+    expect(link?.getAttribute('href')).toContain(`/api/imports/${ID}/report`);
+    expect(link?.getAttribute('target')).toBe('_blank');
+    expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
+  });
+
   it('explains an import that no longer exists', () => {
     storeState.imports = [];
     act(() => root.render(createElement(EvalRunView, { importId: ID })));

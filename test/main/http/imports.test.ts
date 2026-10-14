@@ -128,6 +128,51 @@ describe('import routes', () => {
     expect((await app.inject('/api/imports')).json()).toEqual([]);
   });
 
+  describe('report', () => {
+    const results = {
+      schemaVersion: 1,
+      cases: [{ name: 'alpha', arms: { with: [{ passed: true }] } }],
+    };
+
+    async function uploadEval(withReport: boolean): Promise<string> {
+      const entries = [
+        { name: 'results.json', data: JSON.stringify(results) },
+        { name: 'traces/alpha/with-1.jsonl', data: '{"type":"x"}\n' },
+        ...(withReport ? [{ name: 'report.html', data: '<p>hello</p>' }] : []),
+      ];
+      const form = multipart(
+        { type: 'eval-run', name: 'Eval' },
+        { name: 'e.zip', data: buildZip(entries) }
+      );
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/imports',
+        payload: form.body,
+        headers: form.headers,
+      });
+      expect(res.statusCode).toBe(201);
+      return res.json().manifest.id;
+    }
+
+    it('serves the stored report with sandbox and nosniff headers', async () => {
+      await setup();
+      const id = await uploadEval(true);
+      const res = await app.inject(`/api/imports/${id}/report`);
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toBe('<p>hello</p>');
+      expect(res.headers['content-type']).toContain('text/html');
+      expect(res.headers['content-security-policy']).toBe('sandbox allow-scripts');
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+    });
+
+    it('returns 404 without a report and 400 for a bad id', async () => {
+      await setup();
+      const id = await uploadEval(false);
+      expect((await app.inject(`/api/imports/${id}/report`)).statusCode).toBe(404);
+      expect((await app.inject('/api/imports/not-an-id/report')).statusCode).toBe(400);
+    });
+  });
+
   it('leaves no upload leftovers and ignores the client filename', async () => {
     await setup();
     await upload();

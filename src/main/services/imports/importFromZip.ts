@@ -66,11 +66,14 @@ export async function importFromZip(
 
   // 2. Entry list + policy
   let fileNames: string[];
+  const entrySizes = new Map<string, number>();
   try {
     const entries = await listZipEntries(request.zipPath, limits);
     const policy = validateArchiveEntries(entries, limits);
     if (policy.errors.length > 0) return invalid(policy.errors);
-    fileNames = entries.filter((entry) => !isDirectoryEntry(entry)).map((entry) => entry.fileName);
+    const files = entries.filter((entry) => !isDirectoryEntry(entry));
+    fileNames = files.map((entry) => entry.fileName);
+    for (const entry of files) entrySizes.set(entry.fileName, entry.uncompressedSize);
   } catch (error) {
     if (error instanceof ZipError) return invalid([error.message]);
     logger.error('Failed to read the archive:', error);
@@ -83,7 +86,7 @@ export async function importFromZip(
   try {
     if (request.type === 'eval-run') {
       const results = await readResults(request.zipPath, fileNames);
-      const evalRun = validateEvalRunBundle(fileNames, results);
+      const evalRun = validateEvalRunBundle(fileNames, results, entrySizes);
       validation = evalRun;
       fields = {
         name: name.value,
@@ -91,6 +94,7 @@ export async function importFromZip(
         summary: evalRun.summary,
         claudeVersion: evalRun.claudeVersion,
         schemaVersion: evalRun.schemaVersion,
+        hasReport: evalRun.hasReport ? true : undefined,
         partial: evalRun.partial ? true : undefined,
         partialReason: evalRun.partialReason,
         traces: evalRun.traces,

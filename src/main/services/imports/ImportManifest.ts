@@ -112,6 +112,7 @@ export function parseManifest(raw: unknown, expectedId: string): ManifestResult 
     manifest.traces = traces;
     if (typeof raw.claudeVersion === 'string') manifest.claudeVersion = raw.claudeVersion;
     if (typeof raw.schemaVersion === 'number') manifest.schemaVersion = raw.schemaVersion;
+    if (raw.hasReport === true) manifest.hasReport = true;
     if (raw.partial === true) manifest.partial = true;
     if (typeof raw.partialReason === 'string') manifest.partialReason = raw.partialReason;
     return { valid: true, manifest };

@@ -15,8 +15,12 @@ import type { EvalArm, ImportTraceRef } from '@shared/types/imports';
 export const RESULTS_FILE = 'results.json';
 const SUPPORTED_RESULTS_SCHEMA_VERSION = 1;
 
+export const REPORT_FILE = 'report.html';
+/** The report is optional and only served back to the browser; larger ones are skipped. */
+export const MAX_REPORT_BYTES = 32 * 1024 * 1024;
+
 /** Produced by Claude Code next to results.json; not needed by the viewer, never extracted. */
-const IGNORED_EVAL_FILES = new Set(['aggregate-result.json', 'report.html']);
+const IGNORED_EVAL_FILES = new Set(['aggregate-result.json']);
 
 const ARMS: readonly EvalArm[] = ['with', 'without'];
 const MAX_CASE_NAME_LENGTH = 200;
@@ -37,6 +41,8 @@ export interface BundleValidation {
 
 export interface EvalRunValidation extends BundleValidation {
   traces: ImportTraceRef[];
+  /** report.html is present at the root, within the size cap, and listed in `extract` */
+  hasReport: boolean;
   schemaVersion?: number;
   claudeVersion?: string;
   partial: boolean;
@@ -87,7 +93,15 @@ function checkCaseName(name: unknown): string | null {
 }
 
 function failedEval(errors: string[]): EvalRunValidation {
-  return { errors, extract: [], ignored: [], summary: '', traces: [], partial: false };
+  return {
+    errors,
+    extract: [],
+    ignored: [],
+    summary: '',
+    traces: [],
+    hasReport: false,
+    partial: false,
+  };
 }
 
 /**
@@ -96,10 +110,12 @@ function failedEval(errors: string[]): EvalRunValidation {
  *
  * @param files  file entry names in the archive (no directories)
  * @param results parsed results.json, or undefined when it was missing/unparseable
+ * @param entrySizes uncompressed size per entry name; used to cap report.html
  */
 export function validateEvalRunBundle(
   files: readonly string[],
-  results: unknown
+  results: unknown,
+  entrySizes?: ReadonlyMap<string, number>
 ): EvalRunValidation {
   const errors = new ErrorList();
 
@@ -199,8 +215,14 @@ export function validateEvalRunBundle(
   });
 
   const ignored: string[] = [];
+  let hasReport = false;
   for (const file of files) {
     if (file === RESULTS_FILE || expected.has(file)) continue;
+    if (file === REPORT_FILE) {
+      if ((entrySizes?.get(file) ?? 0) > MAX_REPORT_BYTES) ignored.push(file);
+      else hasReport = true;
+      continue;
+    }
     if (IGNORED_EVAL_FILES.has(file)) {
       ignored.push(file);
       continue;
@@ -220,10 +242,11 @@ export function validateEvalRunBundle(
 
   return {
     errors: [],
-    extract: [RESULTS_FILE, ...traces.map((trace) => trace.file)],
+    extract: [RESULTS_FILE, ...traces.map((trace) => trace.file), ...(hasReport ? [REPORT_FILE] : [])],
     ignored,
     summary,
     traces,
+    hasReport,
     schemaVersion,
     claudeVersion,
     partial,
